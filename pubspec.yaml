@@ -43,6 +43,10 @@ dependencies:
   uuid: ^4.5.1
   http: ^1.1.0
   flutter_native_splash: ^2.4.6
+  url_launcher: ^6.2.1
+  cached_network_image: ^3.3.1
+  cloudinary_flutter: ^1.3.0
+  cloudinary_url_gen: ^1.8.0
 
 dev_dependencies:
   flutter_test:
@@ -88,16 +92,18 @@ flutter:
   # "family" key with the font family name, and a "fonts" key with a
   # list giving the asset and other descriptors for the font. For
   # example:
-  # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
-  #         style: italic
-  #   - family: Trajan Pro
-  #     fonts:
-  #       - asset: fonts/TrajanPro.ttf
-  #       - asset: fonts/TrajanPro_Bold.ttf
+  fonts:
+     - family: RacingSansOne
+       fonts:
+         - asset: fonts/RacingSansOne-Regular.ttf
+     - family: Montserrat
+       fonts:
+         - asset: fonts/Montserrat-Italic-VariableFont_wght.ttf
+           style: italic
+         - asset: fonts/Montserrat-ExtraBold.ttf
+           weight: 700
+         - asset: fonts/Montserrat-Bold.ttf
+           weight: 800
   #         weight: 700
   #
   # For details regarding fonts from package dependencies,

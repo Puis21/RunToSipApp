@@ -29,9 +29,9 @@ extension RunTypeExtension on RunType {
 
   Color get color {
     switch (this) {
-      case RunType.threeKm: return Colors.green;
+      case RunType.threeKm: return Colors.yellow;
       case RunType.fiveKm: return Colors.orange;
-      case RunType.sevenKm: return Colors.red;
+      case RunType.sevenKm: return Colors.brown;
     }
   }
 }
@@ -39,9 +39,11 @@ extension RunTypeExtension on RunType {
 class RunModel {
   String name;
   String date;
+  String time;
+  String link;
   int runNumber;
   String description;
-  String image = 'assets/RTSLog.png';
+  String image = 'https://picsum.photos/700/600';
 
   RunType runType = RunType.threeKm;
 
@@ -60,10 +62,13 @@ class RunModel {
   RunModel({
     required this.name,
     required this.date,
+    required this.time,
+    required this.link,
     required this.description,
     required this.runNumber,
     required this.lat,
     required this.long,
+    required this.image,
     required this.viewIsSelected,
   });
 
@@ -82,10 +87,13 @@ class RunModel {
     return RunModel(
       name: data['runName'] ?? '',
       date: dateString,
+      time: data['time'] ?? '',
+      link: data['link'] ?? '',
       description: data['description'] ?? '',
       runNumber: data['runNumber'] ?? 0,
       lat: data['lat'] ?? 21.502888,
       long: data['long'] ?? -157.999006,
+      image: data['image'] ?? 'https://picsum.photos/700/600',
       viewIsSelected: data['viewIsSelected'] ?? false,
     );
   }

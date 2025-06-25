@@ -7,6 +7,8 @@ import 'package:run_to_sip_app/widgets/baseEndDrawer.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:run_to_sip_app/Pages/auth.dart';
 import 'package:run_to_sip_app/Pages/admin_upload_run.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:ui';
 
 class HomePage extends StatefulWidget {
   @override
@@ -116,12 +118,15 @@ class _MyHomePageState extends State<HomePage> {
                 .map((doc) => RunModel.fromFirestore(doc.data() as Map<String, dynamic>))
                 .toList();
 
+            ///Listing only last 20 runs for optimisation
+            final last20Runs = runs.take(20).toList();
+
             return ListView.separated(
-              itemCount: runs.length,
+              itemCount: last20Runs.length,
               separatorBuilder: (context, index) => const SizedBox(height: 25),
               itemBuilder: (context, index) {
-                final run = runs[index];
-                return InkWell(
+                final run = last20Runs[index];
+                final runTile = InkWell(
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(
                         builder: (context) => RunPage(run: run)
@@ -129,10 +134,11 @@ class _MyHomePageState extends State<HomePage> {
                   },
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
-                    padding: const EdgeInsets.all(20),
+                    height: 150, // or any fixed height if needed
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
-                      gradient: _runGradient(index),
+                      ///REMOVED GRADIENT
+                      //gradient: _runGradient(index),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.2),
@@ -141,61 +147,112 @@ class _MyHomePageState extends State<HomePage> {
                         ),
                       ],
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              run.runNumber.toString(),
-                              style: const TextStyle(
-                                fontSize: 25,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Stack(
+                        children: [
+                          // Step 1: Background Image
+                          Positioned.fill(
+                            child: CachedNetworkImage(
+                              imageUrl: run.image,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Center(child: CircularProgressIndicator()),
+                              errorWidget: (context, url, error) => Center(child: Text("Image not available")),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              run.date,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                run.name,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                run.description,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.white70,
-                                ),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
                           ),
-                        ),
-                      ],
+
+                          // Blur layer over the image
+                          Positioned.fill(
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                              child: Container(
+                                color: Colors.black.withOpacity(0.4), // slight dark overlay for contrast
+                              ),
+                            ),
+                          ),
+
+                          // Text content
+                          Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 15),
+                                    Text(
+                                      '#${run.runNumber.toString()}',
+                                      style: const TextStyle(
+                                        fontSize: 25,
+                                        fontFamily: 'Montserrat',
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 15),
+                                    Text(
+                                      run.date,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontFamily: 'Montserrat',
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        run.name,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontFamily: 'RacingSansOne',
+                                          fontStyle: FontStyle.italic,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        run.description,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontFamily: 'Montserrat',
+                                          color: Colors.white70,
+                                        ),
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
+
+                ///Optional?: Make Runs other than first run grey
+                if (index == 0) {
+                  return runTile;
+                } else {
+                  return ColorFiltered(
+                    colorFilter: const ColorFilter.matrix(<double>[
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: runTile,
+                  );
+                }
+
               },
             );
           },

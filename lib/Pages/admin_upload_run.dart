@@ -27,6 +27,7 @@ class _CreateRunPageState extends State<CreateRunPage> {
   final TextEditingController _driveLinkController = TextEditingController();
   final TextEditingController _runNumberController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _stravalinkController = TextEditingController();
 
   final String token = '1234567890';
   String? _selectedLocation;
@@ -38,11 +39,17 @@ class _CreateRunPageState extends State<CreateRunPage> {
   List<dynamic> listOfLocations = [];
 
   DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
+
   bool get isEditMode => widget.runNumber != null;
 
   @override
   void initState() {
     super.initState();
+
+    widget.initialData?.forEach((key, value) {
+      print('$key: $value');
+    });
 
     _searchController.addListener(() {
       _onChange();
@@ -53,6 +60,9 @@ class _CreateRunPageState extends State<CreateRunPage> {
       _runNumberController.text = widget.runNumber!;
       _runNameController.text = widget.initialData!['runName'] ?? '';
       _descriptionController.text = widget.initialData!['description'] ?? '';
+      _searchController.text = '';
+      _stravalinkController.text = widget.initialData!['link'] ?? '';
+      _driveLinkController.text = widget.initialData!['image'] ?? '';
 
       // Handle date - could be String, DateTime, or Timestamp
       final dateData = widget.initialData!['date'];
@@ -68,20 +78,30 @@ class _CreateRunPageState extends State<CreateRunPage> {
         _selectedDate = dateData.toDate();
       }
 
-      // Handle image URL - if it's an asset, show in field
-      final imageUrl = widget.initialData!['imageUrl'] ?? '';
-      _driveLinkController.text = imageUrl;
-    }
+      final timeData = widget.initialData!['time'];
+      if (timeData is String) {
+        try {
+          _selectedTime = TimeOfDay.fromDateTime(
+            DateFormat('HH:mm').parse(timeData),
+          );
+        } catch (e) {
+          print('Error parsing time string: $e');
+        }
+      } else if (timeData is TimeOfDay) {
+        _selectedTime = timeData;
+      } else if (timeData is Timestamp) {
+        _selectedTime = TimeOfDay.fromDateTime(timeData.toDate());
+      }
 
+    }
   }
 
-  _onChange(){
+  _onChange() {
     if (_debounce?.isActive ?? false) _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
       placeSuggestion(_searchController.text);
     });
   }
-
 
   void _onPlaceSelected(Map<String, dynamic> prediction) async {
     final placeId = prediction['place_id'];
@@ -96,10 +116,10 @@ class _CreateRunPageState extends State<CreateRunPage> {
   Future<Map<String, double>?> getPlaceLatLng(String placeId) async {
     const apiKey = "AIzaSyA604H27JH_Fct5dBUNf3yMOshcahnWUc0";
     final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/details/json'
-            '?place_id=$placeId'
-            '&key=$apiKey'
-            '&fields=geometry'
+      'https://maps.googleapis.com/maps/api/place/details/json'
+      '?place_id=$placeId'
+      '&key=$apiKey'
+      '&fields=geometry',
     );
 
     final response = await http.get(url);
@@ -122,9 +142,11 @@ class _CreateRunPageState extends State<CreateRunPage> {
 
     const String apiKey = "AIzaSyA604H27JH_Fct5dBUNf3yMOshcahnWUc0";
     try {
-      String baseUrl = "https://maps.googleapis.com/maps/api/place/autocomplete/json";
+      String baseUrl =
+          "https://maps.googleapis.com/maps/api/place/autocomplete/json";
       String encodedInput = Uri.encodeComponent(input); // Encode the input
-      String request = '$baseUrl?input=$encodedInput&key=$apiKey&sessiontoken=$token';
+      String request =
+          '$baseUrl?input=$encodedInput&key=$apiKey&sessiontoken=$token';
 
       if (kDebugMode) {
         print("Sending request to: $request");
@@ -139,7 +161,9 @@ class _CreateRunPageState extends State<CreateRunPage> {
 
       if (response.statusCode == 200) {
         setState(() {
-          listOfLocations = (data['predictions'] as List).take(3).toList(); // Use correct field name and null check
+          listOfLocations = (data['predictions'] as List)
+              .take(3)
+              .toList(); // Use correct field name and null check
         });
       } else {
         throw Exception('Failed to load predictions: ${data['error_message']}');
@@ -167,30 +191,52 @@ class _CreateRunPageState extends State<CreateRunPage> {
     }
   }
 
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+      builder: (BuildContext context, Widget? child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedTime = picked;
+      });
+    }
+  }
+
   String? convertDriveLinkToDirect(String link) {
-    // If it's already an asset path, return as is
-    if (link.startsWith('assets/')) {
-      return link;
+    if (link.contains("uc?export=view&id=")) return link; // already direct
+
+    final patterns = [
+      RegExp(r'drive\.google\.com\/file\/d\/([^\/]+)'),
+      RegExp(r'drive\.google\.com\/open\?id=([^&]+)'),
+      RegExp(r'drive\.google\.com\/uc\?id=([^&]+)'),
+      RegExp(r'drive\.google\.com\/uc\?export=view&id=([^&]+)'),
+    ];
+
+    for (var pattern in patterns) {
+      final match = pattern.firstMatch(link);
+      if (match != null) {
+        final fileId = match.group(1);
+        return 'https://drive.google.com/uc?export=view&id=$fileId';
+      }
     }
 
-    // Handle Google Drive links
-    final regExp = RegExp(r'/d/([^/]+)');
-    final match = regExp.firstMatch(link);
-    if (match != null && match.groupCount >= 1) {
-      final fileId = match.group(1);
-      return 'https://drive.google.com/uc?export=view&id=$fileId';
-    }
-
-    // If it's neither asset nor Google Drive, return as is (could be direct URL)
-    return link;
+    return link; // fallback, better than returning null
   }
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedLatLng == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please select a valid location")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Please select a valid location")));
       return;
     }
 
@@ -201,43 +247,52 @@ class _CreateRunPageState extends State<CreateRunPage> {
       return;
     }
 
+    if (_selectedTime == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Please select a time')));
+      return;
+    }
+
     final convertedLink = convertDriveLinkToDirect(_driveLinkController.text);
 
-    if (convertedLink == null || convertedLink.isEmpty) {
+    if (convertedLink == null || !convertedLink.startsWith("http")) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please enter a valid image path or Google Drive link'),
-        ),
+        SnackBar(content: Text('Please enter a valid Google Drive link')),
       );
       return;
     }
 
     try {
-      // Show loading
+      // Show loading dialog
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => Center(child: CircularProgressIndicator()),
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
 
+      // Shared run data
       final runData = {
         'runName': _runNameController.text,
         'description': _descriptionController.text,
+        'link': _stravalinkController.text,
         'date': _selectedDate,
+        'time': _selectedTime != null ? formatTimeOfDay24(_selectedTime!) : null,
         'lat': _selectedLatLng!['lat'],
         'long': _selectedLatLng!['lng'],
-        'imageUrl': convertedLink,
+        'image': convertedLink,
       };
 
       if (isEditMode) {
-        // Update existing run
+        // Edit existing run
         runData['updatedAt'] = Timestamp.now();
+
         await FirebaseFirestore.instance
             .collection('runs')
             .doc(widget.runNumber)
             .update(runData);
       } else {
-        // Create new run
+        // Add new fields for new run
         runData.addAll({
           'runNumber': int.parse(_runNumberController.text),
           'numPeople': 0,
@@ -245,8 +300,6 @@ class _CreateRunPageState extends State<CreateRunPage> {
           'numPeople5km': 0,
           'numPeople7km': 0,
           'viewIsSelected': false,
-          'lat': _selectedLatLng!['lat'],
-          'long': _selectedLatLng!['lng'],
           'createdAt': Timestamp.now(),
         });
 
@@ -255,6 +308,17 @@ class _CreateRunPageState extends State<CreateRunPage> {
             .doc(_runNumberController.text)
             .set(runData);
       }
+
+      Navigator.of(context).pop();
+    } catch (e) {
+      // Dismiss loading if error
+      Navigator.of(context).pop();
+
+      // Optional: show error dialog/snackbar
+      print('Error saving run: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save run.')));
 
       // Hide loading
       Navigator.of(context).pop();
@@ -278,8 +342,10 @@ class _CreateRunPageState extends State<CreateRunPage> {
         _descriptionController.clear();
         _driveLinkController.clear();
         _runNumberController.clear();
+        _stravalinkController.clear();
         setState(() {
           _selectedDate = null;
+          _selectedTime = null;
         });
       }
     } catch (e) {
@@ -294,6 +360,12 @@ class _CreateRunPageState extends State<CreateRunPage> {
         ),
       );
     }
+  }
+
+  String formatTimeOfDay24(TimeOfDay tod) {
+    final hour = tod.hour.toString().padLeft(2, '0');
+    final minute = tod.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 
   @override
@@ -341,10 +413,11 @@ class _CreateRunPageState extends State<CreateRunPage> {
                     value == null || value.isEmpty ? 'Enter run name' : null,
               ),
 
+              SizedBox(height: 16),
+
               TextFormField(
                 controller: _descriptionController,
                 decoration: InputDecoration(labelText: 'Description'),
-                maxLines: 3,
                 validator: (value) =>
                     value == null || value.isEmpty ? 'Enter description' : null,
               ),
@@ -355,9 +428,7 @@ class _CreateRunPageState extends State<CreateRunPage> {
                 controller: _searchController,
                 decoration: InputDecoration(hintText: 'Add Run Loc'),
                 onChanged: (value) {
-                  setState(() {
-
-                  });
+                  setState(() {});
                 },
               ),
               Visibility(
@@ -371,17 +442,19 @@ class _CreateRunPageState extends State<CreateRunPage> {
                     itemBuilder: (context, index) {
                       return GestureDetector(
                         onTap: () async {
-                          final coords = await getPlaceLatLng(listOfLocations[index]['place_id']);
+                          final coords = await getPlaceLatLng(
+                            listOfLocations[index]['place_id'],
+                          );
                           setState(() {
                             _selectedLatLng = coords;
-                            _selectedLocation = listOfLocations[index]['description'];
+                            _selectedLocation =
+                                listOfLocations[index]['description'];
                             _searchController.text = _selectedLocation!;
                             listOfLocations = []; // Clear the suggestions
                           });
                         },
                         child: ListTile(
-                          title: Text(listOfLocations[index]['description'],
-                          ),
+                          title: Text(listOfLocations[index]['description']),
                         ),
                       );
                     },
@@ -404,7 +477,6 @@ class _CreateRunPageState extends State<CreateRunPage> {
                 ),
                 ),
               ),*/
-
               SizedBox(height: 16),
 
               TextButton(
@@ -418,15 +490,35 @@ class _CreateRunPageState extends State<CreateRunPage> {
 
               SizedBox(height: 16),
 
+              TextButton(
+                onPressed: _pickTime,
+                child: Text(
+                  _selectedTime == null
+                      ? 'Select Time'
+                      : 'Time: ${_selectedTime != null ? formatTimeOfDay24(_selectedTime!) : 'No time selected'}',
+                ),
+              ),
+
+              SizedBox(height: 16),
+
+              TextFormField(
+                controller: _stravalinkController,
+                decoration: InputDecoration(labelText: 'StravaLink'),
+                validator: (value) =>
+                value == null || value.isEmpty ? 'Enter Strava Link' : null,
+              ),
+
+              SizedBox(height: 16),
+
               TextFormField(
                 controller: _driveLinkController,
                 decoration: InputDecoration(
-                  labelText: 'Image Path or Google Drive Link',
+                  labelText: 'Google Drive Link',
                   hintText:
-                      'e.g., assets/RTSLog.png or Google Drive share link',
+                      'Google Drive share link',
                 ),
                 validator: (value) => value == null || value.isEmpty
-                    ? 'Enter image path or link'
+                    ? 'Enter link'
                     : null,
               ),
 

@@ -6,6 +6,8 @@ import 'package:run_to_sip_app/widgets/baseAppBar.dart';
 import 'package:run_to_sip_app/widgets/baseEndDrawer.dart';
 import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'auth.dart';
 
@@ -112,7 +114,7 @@ class _RunPageState extends State<RunPage> {
       case '5km':
         return Colors.orange;
       case '7km':
-        return Colors.red;
+        return Colors.brown;
       default:
         return Colors.blue;
     }
@@ -221,24 +223,42 @@ class _RunPageState extends State<RunPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            child: SizedBox(
-              height: 250,
-              width: double.infinity,
-              child: Image.asset(
-                /// TO DO: Add form image
-                widget.run.image,
-                fit: BoxFit.cover,
+          ///OPTIONAL??? ASK NEMIR AND ALE
+  /*        Container(
+            margin: EdgeInsets.all(16), //Add some margin
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 6,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: */ClipRRect(
+              //borderRadius: BorderRadius.circular(20),
+              child: SizedBox(
+                height: 250,
+                width: double.infinity,
+                child: CachedNetworkImage(
+                  imageUrl: widget.run.image,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) =>
+                      Center(child: CircularProgressIndicator()),
+                  errorWidget: (context, url, error) =>
+                      Center(child: Text("Image not available")),
+                ),
               ),
             ),
-          ),
+          //),
           Padding(
             padding: EdgeInsets.all(12),
             child: Align(
               alignment: Alignment.center,
               child: Text(
                 widget.run.name,
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 30, fontFamily: 'RacingSansOne'),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -260,7 +280,7 @@ class _RunPageState extends State<RunPage> {
               padding: EdgeInsets.all(15),
               child: Text(
                 widget.run.description,
-                style: TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16, fontFamily: 'Montserrat'),
                 textAlign: TextAlign.justify,
               ),
             ),
@@ -274,10 +294,73 @@ class _RunPageState extends State<RunPage> {
                     SizedBox(width: 8),
                     Text(
                       "Date: ${DateFormat('dd/MM/yyyy').format(DateFormat('dd/MM/yyyy').parse(widget.run.date))}",
-                      style: TextStyle(fontSize: 16, color: Colors.grey[800]),
+                      style: TextStyle(fontSize: 16, fontFamily: 'Montserrat', color: Colors.grey[800]),
                     ),
                   ],
                 )
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(left: 12, top: 5, bottom: 5),
+            child: SizedBox(
+                child: Row(
+                  children: [
+                    Icon(Icons.timer, size: 18, color: Colors.grey[700]),
+                    SizedBox(width: 8),
+                    Text(
+                      "Time: ${widget.run.time}",
+                      style: TextStyle(fontSize: 16, fontFamily: 'Montserrat', color: Colors.grey[800]),
+                    ),
+                  ],
+                )
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(left: 12, top: 5, bottom: 5),
+            child: SizedBox(
+                child: Row(
+                  children: [
+                    Icon(Icons.link, size: 18, color: Colors.grey[700]),
+                    SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () async {
+                        final link = widget.run.link ?? '';
+                        if (link.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('No link available')),
+                          );
+                          return;
+                        }
+
+                        final url = Uri.parse(link);
+
+                        if (await canLaunchUrl(url)) {
+                          final launched = await launchUrl(url, mode: LaunchMode.externalApplication);
+                          print('Launch result: $launched');
+                          if (!launched) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Could not launch the link')),
+                            );
+                          }
+                        } else {
+                          print('Cannot launch the URL');
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Could not launch the link')),
+                          );
+                        }
+                      },
+                      child: Text(
+                        "Run #${widget.run.runNumber} Strava Link",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontFamily: 'Montserrat',
+                          color: Colors.blue, // To make it look like a link
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
             ),
           ),
           Padding(
@@ -406,7 +489,10 @@ class _RunPageState extends State<RunPage> {
                               'runName': widget.run.name,
                               'description': widget.run.description,
                               'date': widget.run.date,
-                              'imageUrl': widget.run.image,
+                              'image': widget.run.image,
+                              'link': widget.run.link,
+                              'time': widget.run.time,
+                              'location': widget.run.name,
                             },
                           ),
                         ),
