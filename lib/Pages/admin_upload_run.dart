@@ -28,6 +28,8 @@ class _CreateRunPageState extends State<CreateRunPage> {
   final TextEditingController _runNumberController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _stravalinkController = TextEditingController();
+  final TextEditingController _meetPointController = TextEditingController();
+  final TextEditingController _sipLocationController = TextEditingController();
 
   final String token = '1234567890';
   String? _selectedLocation;
@@ -63,6 +65,8 @@ class _CreateRunPageState extends State<CreateRunPage> {
       _searchController.text = '';
       _stravalinkController.text = widget.initialData!['link'] ?? '';
       _driveLinkController.text = widget.initialData!['image'] ?? '';
+      _meetPointController.text = widget.initialData!['meetPoint'] ?? '';
+      _sipLocationController.text = widget.initialData!['sipLocation'] ?? '';
 
       // Handle date - could be String, DateTime, or Timestamp
       final dateData = widget.initialData!['date'];
@@ -276,6 +280,8 @@ class _CreateRunPageState extends State<CreateRunPage> {
         'runName': _runNameController.text,
         'description': _descriptionController.text,
         'link': _stravalinkController.text,
+        'meetPoint': _meetPointController.text,
+        'sipLocation': _sipLocationController.text,
         'date': _selectedDate,
         'time': _selectedTime != null ? formatTimeOfDay24(_selectedTime!) : null,
         'lat': _selectedLatLng!['lat'],
@@ -343,6 +349,8 @@ class _CreateRunPageState extends State<CreateRunPage> {
         _driveLinkController.clear();
         _runNumberController.clear();
         _stravalinkController.clear();
+        _meetPointController.clear();
+        _sipLocationController.clear();
         setState(() {
           _selectedDate = null;
           _selectedTime = null;
@@ -511,6 +519,24 @@ class _CreateRunPageState extends State<CreateRunPage> {
               SizedBox(height: 16),
 
               TextFormField(
+                controller: _meetPointController,
+                decoration: InputDecoration(labelText: 'Meet Point'),
+                validator: (value) =>
+                value == null || value.isEmpty ? 'Enter meet Point' : null,
+              ),
+
+              SizedBox(height: 16),
+
+              TextFormField(
+                controller: _sipLocationController,
+                decoration: InputDecoration(labelText: 'Sip Location'),
+                validator: (value) =>
+                value == null || value.isEmpty ? 'Enter Sip Location' : null,
+              ),
+
+              SizedBox(height: 16),
+
+              TextFormField(
                 controller: _driveLinkController,
                 decoration: InputDecoration(
                   labelText: 'Google Drive Link',
@@ -564,6 +590,10 @@ class _CreateRunPageState extends State<CreateRunPage> {
     _descriptionController.dispose();
     _driveLinkController.dispose();
     _runNumberController.dispose();
+    _searchController.dispose();
+    _stravalinkController.dispose();
+    _meetPointController.dispose();
+    _sipLocationController.dispose();
     _debounce?.cancel();
     super.dispose();
   }

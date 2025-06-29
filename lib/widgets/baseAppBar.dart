@@ -38,7 +38,8 @@ AppBar buildBaseAppBar(BuildContext context, title) {
     title: Text(
       title.toString(),
       style: TextStyle(
-        fontWeight: FontWeight.bold,
+        fontFamily: 'RacingSansOne',
+        fontSize: 30,
         color: Colors.black,
       ),
     ),

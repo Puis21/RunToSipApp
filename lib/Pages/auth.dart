@@ -22,16 +22,15 @@ class Auth{
   Future<void> createUserWithEmailAndPassword({
     required String email,
     required String password,
-    required String username,
+    required String fullName,
   }) async {
     UserCredential cred = await firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password
     );
-
     await fireStore.collection('users').doc(cred.user!.email).set({
       'email': email,
-      'username': username,
+      'fullName': fullName,
       'is_admin': false,
       'date_joined': FieldValue.serverTimestamp(), // current timestamp
       'runs_total': 0,
@@ -41,6 +40,11 @@ class Auth{
     });
   }
 
+  Future<void> sendPasswordResetEmail({
+    required String email,
+  }) async {
+    await firebaseAuth.sendPasswordResetEmail(email: email);
+  }
 
   Future<void> signOut() async {
     await firebaseAuth.signOut();

@@ -211,7 +211,6 @@ class _MyHomePageState extends State<HomePage> {
                                         style: const TextStyle(
                                           fontSize: 16,
                                           fontFamily: 'RacingSansOne',
-                                          fontStyle: FontStyle.italic,
                                           color: Colors.white,
                                         ),
                                       ),

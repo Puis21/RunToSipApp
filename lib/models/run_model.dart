@@ -41,6 +41,8 @@ class RunModel {
   String date;
   String time;
   String link;
+  String meetPoint;
+  String sipLocation;
   int runNumber;
   String description;
   String image = 'https://picsum.photos/700/600';
@@ -64,6 +66,8 @@ class RunModel {
     required this.date,
     required this.time,
     required this.link,
+    required this.meetPoint,
+    required this.sipLocation,
     required this.description,
     required this.runNumber,
     required this.lat,
@@ -89,6 +93,8 @@ class RunModel {
       date: dateString,
       time: data['time'] ?? '',
       link: data['link'] ?? '',
+      meetPoint: data['meetPoint'] ?? '',
+      sipLocation: data['sipLocation'] ?? '',
       description: data['description'] ?? '',
       runNumber: data['runNumber'] ?? 0,
       lat: data['lat'] ?? 21.502888,
