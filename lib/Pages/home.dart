@@ -8,7 +8,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:run_to_sip_app/Pages/auth.dart';
 import 'package:run_to_sip_app/Pages/admin_upload_run.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:run_to_sip_app/Provider/UserProvider.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'dart:ui';
+
 
 class HomePage extends StatefulWidget {
   @override
@@ -28,14 +33,23 @@ class _MyHomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    userEmail = Auth().currentUser?.email;
-    if (userEmail != null) {
-      userDoc = _fireStore.collection('users').doc(userEmail);
-      _checkAdminStatus();
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final email = FirebaseAuth.instance.currentUser?.email;
+      if (email != null) {
+        context.read<UserProvider>().loadUserByEmail(email);
+      }
+    });
+
+    subscribeToAllUsersTopic();
   }
 
-  Future<void> _checkAdminStatus() async {
+  Future<void> subscribeToAllUsersTopic() async {
+    await FirebaseMessaging.instance.subscribeToTopic('all_users');
+    print('Subscribed to all_users topic');
+  }
+
+  ///MOVED TO PROVIDER
+/*  Future<void> _checkAdminStatus() async {
     final user = Auth().currentUser;
     if (user != null) {
       final doc = await FirebaseFirestore.instance
@@ -46,7 +60,7 @@ class _MyHomePageState extends State<HomePage> {
         _isAdmin = doc.data()?['is_admin'] ?? false;
       });
     }
-  }
+  }*/
 
   LinearGradient _runGradient(int index) {
     if(index == 0)
@@ -78,6 +92,8 @@ class _MyHomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    _isAdmin = context.watch<UserProvider>().isAdmin;
+
     return Scaffold(
       appBar: buildBaseAppBar(context, "List of Runs"),
       endDrawer: buildBaseEndDrawer(context),

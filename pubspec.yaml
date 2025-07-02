@@ -49,6 +49,15 @@ dependencies:
   #cloudinary_url_gen: ^1.8.0
   mobile_scanner: ^7.0.1
   pretty_qr_code: ^3.4.0
+  lottie: ^3.3.1
+  provider: ^6.0.0
+  shared_preferences: ^2.2.2
+  confetti: ^0.7.0
+  #animations: ^2.0.7 REPLACED WITH ANIMATED TEXT KIT FOR EASIER IMPLEMENTATION
+  audioplayers: ^6.5.0
+  animated_text_kit: ^4.2.2
+  firebase_messaging: ^15.2.8
+  flutter_local_notifications: 14.1.1
 
 dev_dependencies:
   flutter_test:
@@ -84,6 +93,7 @@ flutter:
         - assets/RTS_Normal_Logo.svg
         - assets/RTS_Splash_Logo.png
         - assets/RTS_NBack_Logo.png
+        - assets/animations/checkmark.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

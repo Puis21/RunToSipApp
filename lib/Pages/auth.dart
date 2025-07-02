@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import "package:run_to_sip_app/models/user_model.dart";
 
 class Auth{
   final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
@@ -28,16 +29,22 @@ class Auth{
         email: email,
         password: password
     );
-    await fireStore.collection('users').doc(cred.user!.email).set({
-      'email': email,
-      'fullName': fullName,
-      'is_admin': false,
-      'date_joined': FieldValue.serverTimestamp(), // current timestamp
-      'runs_total': 0,
-      '3km': 0,
-      '5km': 0,
-      '7km': 0,
-    });
+
+    final newUser = AppUserModel(
+      email: email,
+      fullName: fullName,
+      level: 0,
+      xp: 0,
+      runsTotal: 0,
+      km3: 0,
+      km5: 0,
+      km7: 0,
+      noDistance: 0,
+      isAdmin: false
+    );
+
+    await fireStore.collection('users').doc(cred.user!.email).set(newUser.toMap());
+
   }
 
   Future<void> sendPasswordResetEmail({
@@ -48,6 +55,15 @@ class Auth{
 
   Future<void> signOut() async {
     await firebaseAuth.signOut();
+  }
+
+
+  Future<AppUserModel?> getUserByEmail(String? email) async {
+    final userDoc = await fireStore.collection('users').doc(email).get();
+
+    if (!userDoc.exists) return null;
+
+    return AppUserModel.fromMap(userDoc.data()!);
   }
 
 }

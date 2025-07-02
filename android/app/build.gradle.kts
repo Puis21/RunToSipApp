@@ -6,6 +6,8 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+println("⚙️ BUILDING WITH JAVA VERSION: ${JavaVersion.current()}")
+
 android {
     namespace = "com.example.run_to_sip_app"
     compileSdk = flutter.compileSdkVersion
@@ -14,10 +16,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "11"
     }
 
     defaultConfig {
@@ -44,7 +47,11 @@ flutter {
     source = "../.."
 }
 
-/*
-dependencies{
-    implementation 'com.google.android.gms:play-services-maps:18.2.0'
-}*/
+
+dependencies {
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    implementation ("com.google.firebase:firebase-bom:33.0.0")
+    implementation ("com.google.firebase:firebase-messaging-ktx")
+    implementation ("com.google.firebase:firebase-analytics-ktx")
+}

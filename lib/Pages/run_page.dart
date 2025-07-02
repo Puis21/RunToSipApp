@@ -1,18 +1,28 @@
+import 'dart:collection';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
+import 'package:provider/provider.dart';
 import 'package:run_to_sip_app/Pages/admin_upload_run.dart';
 import 'package:run_to_sip_app/models/run_model.dart';
+import 'package:run_to_sip_app/models/user_model.dart';
 import 'package:run_to_sip_app/widgets/baseAppBar.dart';
 import 'package:run_to_sip_app/widgets/baseEndDrawer.dart';
 import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'dart:async';
+import 'package:lottie/lottie.dart' as lottie;
+import 'package:run_to_sip_app/Provider/UserProvider.dart';
+import 'package:provider/provider.dart';
 
+import 'dart:async';
 import 'auth.dart';
+
+enum QRScanStage { scanning, buttons, animation }
 
 class RunPage extends StatefulWidget {
   final RunModel run;
@@ -32,12 +42,25 @@ class _RunPageState extends State<RunPage> {
   GoogleMapController? mapController;
   Set<Marker> markers = {};
   Timer? _updateTimer;
-  bool _hasLocalChanges = false;
+
+  //Logic for debouncing and processing user selections
+  final _operationQueue = Queue<Future Function()>();
+  bool _isProcessingQueue = false;
+  final int _maxQueueSize = 5;
+  late final Future<SharedPreferences> _prefsFuture;
+  SharedPreferences? _prefs;
+
+  bool canCloseQR = true;
+
+  //Scan switch statement
+  QRScanStage _currentStage = QRScanStage.scanning;
 
   final FirebaseFirestore _fireStore = FirebaseFirestore.instance;
-  String? userEmail; // will get from auth
 
+  ///USED IN PREV VERSION AND CHANGED WITH APPUSERMODEL
   late DocumentReference userDoc; // user's Firestore doc reference
+
+  late UserProvider _userProvider;
 
   //Mobile Scanner Controller
   final MobileScannerController controller = MobileScannerController(
@@ -47,12 +70,71 @@ class _RunPageState extends State<RunPage> {
   @override
   void initState() {
     super.initState();
-    userEmail = Auth().currentUser?.email;
-    if (userEmail != null) {
-      userDoc = _fireStore.collection('users').doc(userEmail);
-      _loadUserSelection();
-      _checkAdminStatus();
-      _checkIfLatestRun();
+    _userProvider = context.read<UserProvider>();
+    loadUserData();
+    _checkIfLatestRun();
+    _prefsFuture = SharedPreferences.getInstance();
+    _initializePreferences();
+  }
+
+  Future<void> _initializePreferences() async {
+    _prefs = await _prefsFuture;
+    _loadSelection(); // Now we can load the selection
+  }
+
+  Future<void> loadUserData() async {
+    print('loadUserData started');
+    try {
+      setState(() => isLoading = true);
+
+      final email = Auth().currentUser?.email;
+      if (email != null) {
+        await _userProvider.loadUserByEmail(email);
+      }
+      print('User loaded successfully');
+    } catch (e, stack) {
+      print('Error loading user data: $e');
+      print(stack);
+    } finally {
+      setState(() => isLoading = false);
+      print('Loading done, isLoading set to false');
+    }
+  }
+
+  Future<void> _loadSelection() async {
+    if (_prefs == null) return;
+
+    final savedDistance = _prefs!.getString('selectedRun_${widget.run.runNumber}');
+    if (savedDistance != null && mounted) {
+      setState(() {
+        selectedRunDistance = savedDistance;
+      });
+    }
+
+    _verifyWithFirebase(savedDistance ?? '');
+
+  }
+
+  Future<void> _verifyWithFirebase(String distance) async {
+    final doc = await _fireStore.collection('runs')
+        .doc('${widget.run.runNumber}')
+        .get();
+
+    if (!doc.exists || !(doc.data()?[_getRunDocFieldName(distance)] ?? false)) {
+      await _saveSelection(null);
+      if (mounted) {
+        setState(() => selectedRunDistance = null);
+      }
+    }
+  }
+
+  Future<void> _saveSelection(String? distance) async {
+    if (_prefs == null) return;
+
+    if (distance != null) {
+      await _prefs!.setString('selectedRun_${widget.run.runNumber}', distance);
+    } else {
+      await _prefs!.remove('selectedRun_${widget.run.runNumber}');
     }
   }
 
@@ -81,40 +163,8 @@ class _RunPageState extends State<RunPage> {
   void dispose() {
     mapController?.dispose();
     _updateTimer?.cancel();
+    _operationQueue.clear();
     super.dispose();
-  }
-
-  Future<void> _checkAdminStatus() async {
-    final user = Auth().currentUser;
-    if (user != null) {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.email)
-          .get();
-      setState(() {
-        _isAdmin = doc.data()?['is_admin'] ?? false;
-      });
-    }
-  }
-
-  Future<void> _loadUserSelection() async {
-    try {
-      final selectionDoc = await _fireStore
-          .collection('user_run_selections')
-          .doc('${userEmail}_${widget.run.runNumber}')
-          .get();
-
-      if (selectionDoc.exists) {
-        final data = selectionDoc.data()!;
-        selectedRunDistance = data['selected_run_distance'] as String?;
-      }
-    } catch (e) {
-      print('Error loading user selection: $e');
-    } finally {
-      setState(() {
-        isLoading = false;
-      });
-    }
   }
 
   // Helper method to get colors for distances
@@ -175,10 +225,12 @@ class _RunPageState extends State<RunPage> {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 20),
-                Expanded(child: Center(child: PrettyQrView.data(
-                  data: widget.run.runNumber.toString(),
-                )
-                )
+                Expanded(
+                  child: Center(
+                    child: PrettyQrView.data(
+                      data: widget.run.runNumber.toString(),
+                    ),
+                  ),
                 ),
                 SizedBox(height: 20),
                 ElevatedButton(
@@ -197,90 +249,222 @@ class _RunPageState extends State<RunPage> {
     );
   }
 
-  void _readQRCodeGen() async {
+  void _readQRCodeGen(BuildContext context) async {
+    _currentStage = QRScanStage.scanning;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Color(0xFFffff00),
-          insetPadding: EdgeInsets.all(20),
-          child: Container(
-            padding: EdgeInsets.all(16),
-            height: MediaQuery.of(context).size.height * 0.8,
-            child: Column(
-              children: [
-                Text(
-                  'Scan QR Code',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 20),
-                Expanded(
-                  child: Center(
-                    child: MobileScanner(
-                      controller: controller,
-                      onDetect: (result) async {
-                        if (result.barcodes.isNotEmpty) {
-                          final barcode = result.barcodes.first;
-                          final runId = barcode
-                              .rawValue; // The run number/id encoded in the QR
-
-                          print('Scanned run ID: $runId');
-                          if (runId == null) return;
-
-                          // Stop the scanner and close the dialog
-                          //controller.stop();
-                          //Navigator.pop(context);
-
-                          // Get current user ID/email
-                          final userEmail = Auth().currentUser?.email;
-                          if (userEmail == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('User not logged in')),
-                            );
-                            return;
-                          }
-
-                          final userRef = _fireStore
-                              .collection('users')
-                              .doc(userEmail);
-                          final runRef = _fireStore
-                              .collection('runs')
-                              .doc(runId);
-
-                          // Update the runsParticipated field on user doc (increment by 1)
-                          await userRef.update({
-                            'runs_total': FieldValue.increment(1),
-                          });
-
-                          // Also increment total participants for the run
-                          await runRef.update({
-                            'numPeople': FieldValue.increment(1),
-                          });
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Run participation recorded!'),
+        return StatefulBuilder(
+          builder:
+              (
+                BuildContext context,
+                void Function(void Function()) setStateDialog,
+              ) {
+                return Dialog(
+                  backgroundColor: Color(0xFFffff00),
+                  insetPadding: EdgeInsets.all(20),
+                  child: Container(
+                    padding: EdgeInsets.all(16),
+                    height: MediaQuery.of(context).size.height * 0.8,
+                    child: Column(
+                      children: [
+                        Text(
+                          'Scan QR Code',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        //SizedBox(height: 20),
+                        Expanded(
+                          child: Center(
+                            child: _switchScanWidget(setStateDialog),
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                        Visibility(
+                          visible: canCloseQR,
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFF6F4E37),
+                              foregroundColor: Colors.white,
                             ),
-                          );
-                        }
-                      },
+                            child: Text('Close'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('Close'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF6F4E37),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
+                );
+              },
         );
       },
+    );
+  }
+
+  Widget _switchScanWidget(void Function(void Function()) setStateDialog) {
+    switch (_currentStage) {
+      case QRScanStage.scanning:
+        return MobileScanner(
+          controller: controller,
+          onDetect: (result) async {
+            if (result.barcodes.isNotEmpty) {
+              final barcode = result.barcodes.first;
+              final runId = barcode.rawValue;
+
+              print('Scanned run ID: $runId');
+              if (runId == null) return;
+
+              await controller.stop(); // Await stop before UI changes
+
+              final userEmail = Auth().currentUser?.email;
+              if (userEmail == null) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('User not logged in')));
+                return;
+              }
+
+              // Update the dialog state
+              setStateDialog(() {
+                canCloseQR = false;
+                _currentStage = QRScanStage.buttons;
+              });
+            }
+          },
+        );
+      case QRScanStage.buttons:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Text(
+              "Choose a run group!",
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            _buildRunOption(
+              '3km',
+              setStateDialog,
+              _userProvider.user!.email,
+              widget.run.runNumber.toString(),
+            ),
+            _buildRunOption(
+              '5km',
+              setStateDialog,
+              _userProvider.user!.email,
+              widget.run.runNumber.toString(),
+            ),
+            _buildRunOption(
+              '7km',
+              setStateDialog,
+              _userProvider.user!.email,
+              widget.run.runNumber.toString(),
+            ),
+            _buildRunOption(
+              'Skip',
+              setStateDialog,
+              _userProvider.user!.email,
+              widget.run.runNumber.toString(),
+            ),
+          ],
+        );
+      case QRScanStage.animation:
+        canCloseQR = true;
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "Registered!",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF22cc88),
+              ),
+            ),
+            lottie.Lottie.asset(
+              'assets/animations/checkmark.json',
+              repeat: false,
+            ),
+          ],
+        );
+
+      default:
+        return Text('Loading...');
+    }
+  }
+
+  Widget _buildRunOption(
+    String label,
+    StateSetter setStateDialogue,
+    String userEmail,
+    String runId,
+  ) {
+    //Optional parameters? mby delete
+    final isSelected = selectedRunDistance == label;
+    final color = _getColorForDistance(label);
+
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _getColorForDistance(label),
+        foregroundColor: Colors.white,
+        fixedSize: Size(double.infinity, 100),
+      ),
+      onPressed: () async {
+        print("Selected: $label");
+
+        ///NOT USED ANYMORE
+        //final userRef = _fireStore.collection('users').doc(userEmail);
+
+        final runRef = _fireStore.collection('runs').doc(runId);
+        final userProvider = context.read<UserProvider>();
+
+        // Determine field names for selected distance
+        String userField = '';
+        String runField = '';
+        switch (label) {
+          case '3km':
+            userProvider.incrementRun('3km');
+            runField = 'numPeople3km';
+            break;
+          case '5km':
+            userProvider.incrementRun('5km');
+            runField = 'numPeople5km';
+            break;
+          case '7km':
+            userProvider.incrementRun('7km');
+            runField = 'numPeople7km';
+            break;
+          case 'Skip':
+            userProvider.incrementRun('noDistance');
+            runField = '';
+            break;
+          default:
+            break;
+        }
+
+        userProvider.increaseXp(1, context: context);
+
+        /*   // Firestore updates
+        await userRef.update({
+          'runs_total': FieldValue.increment(1),
+          if (userField != '') userField: FieldValue.increment(1),
+        });*/
+
+        await runRef.update({
+          'numPeople': FieldValue.increment(1),
+          if (runField != '') runField: FieldValue.increment(1),
+        });
+
+        // Save choice or proceed to next stage
+        setStateDialogue(() {
+          _currentStage = QRScanStage.animation;
+        });
+      },
+      child: Text(
+        "$label",
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 26),
+      ),
     );
   }
 
@@ -343,142 +527,81 @@ class _RunPageState extends State<RunPage> {
     });
   }
 
-  // Store the final state we want to save
-  String? _finalSelectedDistance;
-  String? _finalPreviouslySelected;
-  bool _finalIsSelected = false;
-
   Future<void> _handleSelectionChange(String distance) async {
-    if (userEmail == null || isLoading || !_isLatestRunResult) return;
+    if (_userProvider.user?.email == null || isLoading || !_isLatestRunResult) return;
 
-    final previouslySelected = selectedRunDistance;
-    final isSameSelected = previouslySelected == distance;
+    final isCurrentlySelected = selectedRunDistance == distance;
+    final newState = !isCurrentlySelected;
 
-    // Update UI immediately (optimistic update)
+    // Save to local storage immediately
+    await _saveSelection(newState ? distance : null);
+
+    // Immediate UI update
     setState(() {
-      if (isSameSelected) {
-        // Deselecting
-        _finalSelectedDistance = null;
-        _finalPreviouslySelected = selectedRunDistance;
-        _finalIsSelected = false;
-        selectedRunDistance = null;
-      } else {
-        // Selecting new or switching
-        _finalPreviouslySelected = selectedRunDistance;
-        _finalSelectedDistance = distance;
-        _finalIsSelected = true;
-        selectedRunDistance = distance;
-      }
-      _hasLocalChanges = true;
+      selectedRunDistance = newState ? distance : null;
     });
 
-    // Cancel any pending Firebase update
-    _updateTimer?.cancel();
+    if (_operationQueue.length >= _maxQueueSize) {
+      _operationQueue.removeFirst(); // Drop oldest operation
+    }
 
-    // Schedule new Firebase update after 600ms of inactivity
-    _updateTimer = Timer(Duration(milliseconds: 600), () {
-      _executeFirebaseUpdate();
-    });
-  }
+    // Add to operation queue
+    _operationQueue.add(() => _createFirebaseOperation(distance, newState));
 
-  Future<void> _executeFirebaseUpdate() async {
-    if (!_hasLocalChanges) return;
-
-    final runDocRef = _fireStore
-        .collection('runs')
-        .doc('${widget.run.runNumber}');
-
-    try {
-      if (_finalIsSelected) {
-        // User ended up selecting something
-        if (_finalPreviouslySelected != null) {
-          // Switch selection
-          await _switchSelection(
-            _finalPreviouslySelected!,
-            _finalSelectedDistance!,
-            runDocRef,
-          );
-        } else {
-          // New selection
-          await _newSelection(_finalSelectedDistance!, runDocRef);
-        }
-      } else {
-        // User ended up deselecting
-        await _removeSelection(_finalPreviouslySelected!, runDocRef);
-      }
-
-      _hasLocalChanges = false;
-    } catch (e) {
-      print('Error updating run counts: $e');
-      // On error, revert UI to previous state
-      setState(() {
-        selectedRunDistance = _finalPreviouslySelected;
-        _hasLocalChanges = false;
-      });
+    if (!_isProcessingQueue) {
+      _processQueue();
     }
   }
 
-  Future<void> _newSelection(
-    String distance,
-    DocumentReference runDocRef,
-  ) async {
-    final runDistanceField = _getRunDocFieldName(distance);
+  Future<void> _processQueue() async {
+    _isProcessingQueue = true;
 
-    // Update user document - just increment counters
-    await userDoc.update({
-      distance: FieldValue.increment(1),
-      'runs_total': FieldValue.increment(1),
-    });
+    while (_operationQueue.isNotEmpty) {
+      final operation = _operationQueue.removeFirst();
+      await operation();
+      await Future.delayed(
+        Duration(milliseconds: 200),
+      ); // Small delay between ops
+    }
 
-    // Update run totals
-    await runDocRef.update({
-      runDistanceField: FieldValue.increment(1),
-      'numPeople': FieldValue.increment(1),
-    });
+    _isProcessingQueue = false;
   }
 
-  Future<void> _removeSelection(
-    String previousDistance,
-    DocumentReference runDocRef,
-  ) async {
-    final runDistanceField = _getRunDocFieldName(previousDistance);
+  Future<void> _createFirebaseOperation(String distance, bool isSelect) async {
+    final docRef = _fireStore.collection('runs').doc('${widget.run.runNumber}');
+    final field = _getRunDocFieldName(distance);
 
-    // Update user document - just decrement counters
-    await userDoc.update({
-      previousDistance: FieldValue.increment(-1),
-      'runs_total': FieldValue.increment(-1),
-    });
-
-    // Update run totals
-    await runDocRef.update({
-      runDistanceField: FieldValue.increment(-1),
-      'numPeople': FieldValue.increment(-1),
-    });
-  }
-
-  Future<void> _switchSelection(
-    String fromDistance,
-    String toDistance,
-    DocumentReference runDocRef,
-  ) async {
-    final fromField = _getRunDocFieldName(fromDistance);
-    final toField = _getRunDocFieldName(toDistance);
-
-    // Update user document - just switch the counters
-    await userDoc.update({
-      fromDistance: FieldValue.increment(-1),
-      toDistance: FieldValue.increment(1),
-    });
-
-    // Update run totals
-    await runDocRef.update({
-      fromField: FieldValue.increment(-1),
-      toField: FieldValue.increment(1),
-    });
+    try {
+      if (isSelect) {
+        await docRef.update({
+          field: FieldValue.increment(1),
+          'numPeople': FieldValue.increment(1),
+        });
+        if (_userProvider.user != null) {
+          await _userProvider.incrementRun(distance);
+        }
+      } else {
+        await docRef.update({
+          field: FieldValue.increment(-1),
+          'numPeople': FieldValue.increment(-1),
+        });
+        if (_userProvider.user != null) {
+          await _userProvider.decrementRun(distance);
+        }
+      }
+    } catch (e) {
+      // Revert UI on error
+      setState(() {
+        selectedRunDistance = isSelect ? null : distance;
+      });
+      rethrow;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    _isAdmin = context.watch<UserProvider>().isAdmin;
+
     if (isLoading) {
       return Scaffold(
         appBar: buildBaseAppBar(context, 'Run #${widget.run.runNumber}'),
@@ -750,19 +873,19 @@ class _RunPageState extends State<RunPage> {
           ),
           Padding(
             padding: EdgeInsets.all(12),
-              child: Center(
-                child: ElevatedButton.icon(
-                  onPressed: () => _readQRCodeGen(),
-                  icon: Icon(Icons.add),
-                  label: Text('Read QR Code'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFFFF5316),
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
+            child: Center(
+              child: ElevatedButton.icon(
+                onPressed: () => _readQRCodeGen(context),
+                icon: Icon(Icons.add),
+                label: Text('Read QR Code'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFFF5316),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 ),
               ),
             ),
+          ),
           Padding(
             padding: EdgeInsets.all(12),
             child: Row(
