@@ -117,7 +117,7 @@ class _MyAppState extends State<MyApp> {
             return HomePage();
           }
 
-          return RunPage(run: run);
+          return RunPage(runNumber: run);
         }
       },
     );

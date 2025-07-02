@@ -25,15 +25,19 @@ import 'auth.dart';
 enum QRScanStage { scanning, buttons, animation }
 
 class RunPage extends StatefulWidget {
-  final RunModel run;
+  final String runNumber;
 
-  const RunPage({super.key, required this.run});
+  const RunPage({super.key, required this.runNumber});
 
   @override
   State<RunPage> createState() => _RunPageState();
 }
 
 class _RunPageState extends State<RunPage> {
+  //Init for fetching data for RunModel
+  RunModel? run;
+  bool isLoadingRun = true;
+
   bool _isAdmin = false;
   bool _isLatestRunResult = false;
   String? selectedRunDistance;
@@ -70,11 +74,35 @@ class _RunPageState extends State<RunPage> {
   @override
   void initState() {
     super.initState();
+    _loadRun();
     _userProvider = context.read<UserProvider>();
     loadUserData();
     _checkIfLatestRun();
     _prefsFuture = SharedPreferences.getInstance();
     _initializePreferences();
+  }
+
+  Future<void> _loadRun() async {
+    // Example: fetch run by number from Firestore
+    final doc = await FirebaseFirestore.instance
+        .collection('runs')
+        .doc(widget.runNumber
+        .toString()) // make sure runNumber is a String here if needed
+        .get();
+
+    if (doc.exists) {
+      final data = doc.data(); // nullable safety
+      if (data != null) {
+        setState(() {
+          run = RunModel.fromFirestore(data);
+          isLoading = false;
+        });
+      } else {
+        // Handle empty data case
+      }
+    } else {
+      // Handle document not found
+    }
   }
 
   Future<void> _initializePreferences() async {
@@ -104,7 +132,7 @@ class _RunPageState extends State<RunPage> {
   Future<void> _loadSelection() async {
     if (_prefs == null) return;
 
-    final savedDistance = _prefs!.getString('selectedRun_${widget.run.runNumber}');
+    final savedDistance = _prefs!.getString('selectedRun_${run!.runNumber}');
     if (savedDistance != null && mounted) {
       setState(() {
         selectedRunDistance = savedDistance;
@@ -117,7 +145,7 @@ class _RunPageState extends State<RunPage> {
 
   Future<void> _verifyWithFirebase(String distance) async {
     final doc = await _fireStore.collection('runs')
-        .doc('${widget.run.runNumber}')
+        .doc('${run!.runNumber}')
         .get();
 
     if (!doc.exists || !(doc.data()?[_getRunDocFieldName(distance)] ?? false)) {
@@ -132,9 +160,9 @@ class _RunPageState extends State<RunPage> {
     if (_prefs == null) return;
 
     if (distance != null) {
-      await _prefs!.setString('selectedRun_${widget.run.runNumber}', distance);
+      await _prefs!.setString('selectedRun_${run!.runNumber}', distance);
     } else {
-      await _prefs!.remove('selectedRun_${widget.run.runNumber}');
+      await _prefs!.remove('selectedRun_${run!.runNumber}');
     }
   }
 
@@ -153,7 +181,7 @@ class _RunPageState extends State<RunPage> {
   }
 
   void _checkIfLatestRun() async {
-    final result = await isLatestRun(widget.run.runNumber.toString());
+    final result = await isLatestRun(run!.runNumber.toString());
     setState(() {
       _isLatestRunResult = result;
     });
@@ -228,7 +256,7 @@ class _RunPageState extends State<RunPage> {
                 Expanded(
                   child: Center(
                     child: PrettyQrView.data(
-                      data: widget.run.runNumber.toString(),
+                      data: run!.runNumber.toString(),
                     ),
                   ),
                 ),
@@ -347,25 +375,25 @@ class _RunPageState extends State<RunPage> {
               '3km',
               setStateDialog,
               _userProvider.user!.email,
-              widget.run.runNumber.toString(),
+              run!.runNumber.toString(),
             ),
             _buildRunOption(
               '5km',
               setStateDialog,
               _userProvider.user!.email,
-              widget.run.runNumber.toString(),
+              run!.runNumber.toString(),
             ),
             _buildRunOption(
               '7km',
               setStateDialog,
               _userProvider.user!.email,
-              widget.run.runNumber.toString(),
+              run!.runNumber.toString(),
             ),
             _buildRunOption(
               'Skip',
               setStateDialog,
               _userProvider.user!.email,
-              widget.run.runNumber.toString(),
+              run!.runNumber.toString(),
             ),
           ],
         );
@@ -480,13 +508,13 @@ class _RunPageState extends State<RunPage> {
       // Delete the run document
       await _fireStore
           .collection('runs')
-          .doc(widget.run.runNumber.toString())
+          .doc(run!.runNumber.toString())
           .delete();
 
       // Delete all user selections for this run
       final selectionsQuery = await _fireStore
           .collection('user_run_selections')
-          .where('run_number', isEqualTo: widget.run.runNumber)
+          .where('run_number', isEqualTo: run!.runNumber)
           .get();
 
       for (var doc in selectionsQuery.docs) {
@@ -520,7 +548,7 @@ class _RunPageState extends State<RunPage> {
       markers.add(
         Marker(
           markerId: MarkerId("runLocation"),
-          position: LatLng(widget.run.lat, widget.run.long),
+          position: LatLng(run!.lat, run!.long),
           infoWindow: InfoWindow(title: "Run Location <3"),
         ),
       );
@@ -568,7 +596,7 @@ class _RunPageState extends State<RunPage> {
   }
 
   Future<void> _createFirebaseOperation(String distance, bool isSelect) async {
-    final docRef = _fireStore.collection('runs').doc('${widget.run.runNumber}');
+    final docRef = _fireStore.collection('runs').doc('${run!.runNumber}');
     final field = _getRunDocFieldName(distance);
 
     try {
@@ -604,13 +632,13 @@ class _RunPageState extends State<RunPage> {
 
     if (isLoading) {
       return Scaffold(
-        appBar: buildBaseAppBar(context, 'Run #${widget.run.runNumber}'),
+        appBar: buildBaseAppBar(context, 'Run #${run!.runNumber}'),
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      appBar: buildBaseAppBar(context, 'Run #${widget.run.runNumber}'),
+      appBar: buildBaseAppBar(context, 'Run #${run!.runNumber}'),
       endDrawer: buildBaseEndDrawer(context),
       body: buildBody(),
     );
@@ -643,7 +671,7 @@ class _RunPageState extends State<RunPage> {
               height: 250,
               width: double.infinity,
               child: CachedNetworkImage(
-                imageUrl: widget.run.image,
+                imageUrl: run!.image,
                 fit: BoxFit.cover,
                 placeholder: (context, url) =>
                     Center(child: CircularProgressIndicator()),
@@ -658,7 +686,7 @@ class _RunPageState extends State<RunPage> {
             child: Align(
               alignment: Alignment.center,
               child: Text(
-                widget.run.name,
+                run!.name,
                 style: TextStyle(fontSize: 30, fontFamily: 'RacingSansOne'),
                 textAlign: TextAlign.center,
               ),
@@ -680,7 +708,7 @@ class _RunPageState extends State<RunPage> {
               ),
               padding: EdgeInsets.all(15),
               child: Text(
-                widget.run.description,
+                run!.description,
                 style: TextStyle(fontSize: 16, fontFamily: 'Montserrat'),
                 textAlign: TextAlign.justify,
               ),
@@ -694,7 +722,7 @@ class _RunPageState extends State<RunPage> {
                   Icon(Icons.calendar_today, size: 18, color: Colors.grey[700]),
                   SizedBox(width: 8),
                   Text(
-                    "Date: ${DateFormat('dd/MM/yyyy').format(DateFormat('dd/MM/yyyy').parse(widget.run.date))}",
+                    "Date: ${DateFormat('dd/MM/yyyy').format(DateFormat('dd/MM/yyyy').parse(run!.date))}",
                     style: TextStyle(
                       fontSize: 16,
                       fontFamily: 'Montserrat',
@@ -713,7 +741,7 @@ class _RunPageState extends State<RunPage> {
                   Icon(Icons.timer, size: 18, color: Colors.grey[700]),
                   SizedBox(width: 8),
                   Text(
-                    "Time: ${widget.run.time}",
+                    "Time: ${run!.time}",
                     style: TextStyle(
                       fontSize: 16,
                       fontFamily: 'Montserrat',
@@ -733,7 +761,7 @@ class _RunPageState extends State<RunPage> {
                   SizedBox(width: 8),
                   GestureDetector(
                     onTap: () async {
-                      final link = widget.run.link ?? '';
+                      final link = run!.link ?? '';
                       if (link.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('No link available')),
@@ -764,7 +792,7 @@ class _RunPageState extends State<RunPage> {
                       }
                     },
                     child: Text(
-                      "Run #${widget.run.runNumber} Strava Link",
+                      "Run #${run!.runNumber} Strava Link",
                       style: TextStyle(
                         fontSize: 16,
                         fontFamily: 'Montserrat',
@@ -785,7 +813,7 @@ class _RunPageState extends State<RunPage> {
                   Icon(Icons.map_rounded, size: 18, color: Colors.grey[700]),
                   SizedBox(width: 8),
                   Text(
-                    "Meeting Point: ${widget.run.meetPoint}",
+                    "Meeting Point: ${run!.meetPoint}",
                     style: TextStyle(
                       fontSize: 16,
                       fontFamily: 'Montserrat',
@@ -804,7 +832,7 @@ class _RunPageState extends State<RunPage> {
                   Icon(Icons.coffee, size: 18, color: Colors.grey[700]),
                   SizedBox(width: 8),
                   Text(
-                    "Sip Location: ${widget.run.sipLocation}",
+                    "Sip Location: ${run!.sipLocation}",
                     style: TextStyle(
                       fontSize: 16,
                       fontFamily: 'Montserrat',
@@ -825,7 +853,7 @@ class _RunPageState extends State<RunPage> {
                 onMapCreated: _onMapCreated,
                 markers: markers,
                 initialCameraPosition: CameraPosition(
-                  target: LatLng(widget.run.lat, widget.run.long),
+                  target: LatLng(run!.lat, run!.long),
                   zoom: 12,
                 ),
               ),
@@ -900,17 +928,17 @@ class _RunPageState extends State<RunPage> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => CreateRunPage(
-                            runNumber: widget.run.runNumber.toString(),
+                            runNumber: run!.runNumber.toString(),
                             initialData: {
-                              'runName': widget.run.name,
-                              'description': widget.run.description,
-                              'date': widget.run.date,
-                              'image': widget.run.image,
-                              'meetingPoint': widget.run.meetPoint,
-                              'sipLocation': widget.run.sipLocation,
-                              'link': widget.run.link,
-                              'time': widget.run.time,
-                              'location': widget.run.name,
+                              'runName': run!.name,
+                              'description': run!.description,
+                              'date': run!.date,
+                              'image': run!.image,
+                              'meetingPoint': run!.meetPoint,
+                              'sipLocation': run!.sipLocation,
+                              'link': run!.link,
+                              'time': run!.time,
+                              'location': run!.name,
                             },
                           ),
                         ),
@@ -993,13 +1021,13 @@ children: [
 Icon(Icons.calendar_today, size: 18, color: Colors.grey[700]),
 SizedBox(width: 8),
 Text(
-DateFormat('dd/MM/yyyy').format(DateTime.parse(widget.run.date)),
+DateFormat('dd/MM/yyyy').format(DateTime.parse(run!.date)),
 style: TextStyle(fontSize: 16, color: Colors.grey[800]),
 ),
 ],
 )
 
-"Date: ${DateFormat('dd/MM/yyyy').format(DateFormat('dd/MM/yyyy').parse(widget.run.date))}",
+"Date: ${DateFormat('dd/MM/yyyy').format(DateFormat('dd/MM/yyyy').parse(run!.date))}",
 */
 
 /*
@@ -1008,13 +1036,13 @@ padding: const EdgeInsets.all(16),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-Text("Run Number: ${widget.run.runNumber}", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+Text("Run Number: ${run!.runNumber}", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
 SizedBox(height: 8),
-Text("Date: ${widget.run.date}", style: TextStyle(fontSize: 16)),
+Text("Date: ${run!.date}", style: TextStyle(fontSize: 16)),
 SizedBox(height: 16),
 Text("Description:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
 SizedBox(height: 8),
-Text(widget.run.description, style: TextStyle(fontSize: 16)),
+Text(run!.description, style: TextStyle(fontSize: 16)),
 // You can use setState here later to update UI
 ],
 ),

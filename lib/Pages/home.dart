@@ -145,7 +145,7 @@ class _MyHomePageState extends State<HomePage> {
                 final runTile = InkWell(
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(
-                        builder: (context) => RunPage(run: run)
+                        builder: (context) => RunPage(runNumber: run.runNumber.toString())
                     ));
                   },
                   borderRadius: BorderRadius.circular(20),
