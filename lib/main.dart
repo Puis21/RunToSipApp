@@ -31,10 +31,11 @@ Future<void> main() async {
 
   ///FCM TOKEN: dYLqMDRnRrifWgg9HOXUe2:APA91bEYXhjXCJ5k56OZ_BYWRaJYt56T-0BS48Hf-THgobBSpmbVylRwHvDg3tMkwhRfJZQfpJLo2hlffUr1UX0bkE1s24rkaPrE-xCNd_QSdXL8HE2qZrE
 
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    print('Received foreground message: ${message.notification?.title}');
-    // Mby local notification here ??
-  });
+  ///DISABLED NOTIFICATIONS INSIDE APP FOR NOW
+  // FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+  //   print('Received foreground message: ${message.notification?.title}');
+  //   // Mby local notification here ??
+  // });
 
   // Handle notification tap when app is in background (but not terminated)
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {

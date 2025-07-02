@@ -118,14 +118,11 @@ class _CreateRunPageState extends State<CreateRunPage> {
   }
 
   Future<Map<String, double>?> getPlaceLatLng(String placeId) async {
-    const apiKey = "AIzaSyA604H27JH_Fct5dBUNf3yMOshcahnWUc0";
-    final url = Uri.parse(
-      'https://maps.googleapis.com/maps/api/place/details/json'
-      '?place_id=$placeId'
-      '&key=$apiKey'
-      '&fields=geometry',
-    );
 
+    ///HTTP for TESTING Flask
+    //http://10.0.2.2:5000
+
+    final url = Uri.parse('https://rts-backend-md5r.onrender.com/place-details?place_id=$placeId');
     final response = await http.get(url);
     final data = json.decode(response.body);
 
@@ -144,30 +141,26 @@ class _CreateRunPageState extends State<CreateRunPage> {
       return;
     }
 
-    const String apiKey = "AIzaSyA604H27JH_Fct5dBUNf3yMOshcahnWUc0";
     try {
-      String baseUrl =
-          "https://maps.googleapis.com/maps/api/place/autocomplete/json";
-      String encodedInput = Uri.encodeComponent(input); // Encode the input
-      String request =
-          '$baseUrl?input=$encodedInput&key=$apiKey&sessiontoken=$token';
+      String encodedInput = Uri.encodeComponent(input);
+      final url = Uri.parse(
+        'https://rts-backend-md5r.onrender.com/place-autocomplete?input=$encodedInput&sessiontoken=$token',
+      );
 
       if (kDebugMode) {
-        print("Sending request to: $request");
+        print("Sending request to: $url");
       }
 
-      var response = await http.get(Uri.parse(request));
-      var data = json.decode(response.body);
+      final response = await http.get(url);
+      final data = json.decode(response.body);
 
       if (kDebugMode) {
         print("API Response: $data");
       }
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 && data['status'] == 'OK') {
         setState(() {
-          listOfLocations = (data['predictions'] as List)
-              .take(3)
-              .toList(); // Use correct field name and null check
+          listOfLocations = (data['predictions'] as List).take(3).toList();
         });
       } else {
         throw Exception('Failed to load predictions: ${data['error_message']}');

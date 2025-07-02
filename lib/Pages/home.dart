@@ -15,6 +15,33 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:ui';
 
 
+///OPTIONAL CODE??? FOR CHECKING USER AUTH ID TOKEN (COULD USE IN THE FUTURE)
+/*final Auth auth = Auth();
+fetchProtectedData();
+void fetchProtectedData() async {
+  final response = await auth.callBackendWithAuth('http://10.0.2.2:5000/protected-route');
+
+  if (response == null) {
+    print('User not logged in');
+    return;
+  }
+
+  if (response.statusCode == 200) {
+    print('Backend response: ${response.body}');
+    // You can setState here to update your UI with the data
+  } else {
+    print('Backend error: ${response.statusCode} ${response.reasonPhrase}');
+  }
+}
+
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    // your UI here
+  );
+}*/
+
+
 class HomePage extends StatefulWidget {
   @override
   State<HomePage> createState() => _MyHomePageState();

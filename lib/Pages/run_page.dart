@@ -6,7 +6,6 @@ import 'package:pretty_qr_code/pretty_qr_code.dart';
 import 'package:provider/provider.dart';
 import 'package:run_to_sip_app/Pages/admin_upload_run.dart';
 import 'package:run_to_sip_app/models/run_model.dart';
-import 'package:run_to_sip_app/models/user_model.dart';
 import 'package:run_to_sip_app/widgets/baseAppBar.dart';
 import 'package:run_to_sip_app/widgets/baseEndDrawer.dart';
 import 'package:intl/intl.dart';
@@ -17,7 +16,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:lottie/lottie.dart' as lottie;
 import 'package:run_to_sip_app/Provider/UserProvider.dart';
-import 'package:provider/provider.dart';
 
 import 'dart:async';
 import 'auth.dart';
@@ -65,6 +63,7 @@ class _RunPageState extends State<RunPage> {
   late DocumentReference userDoc; // user's Firestore doc reference
 
   late UserProvider _userProvider;
+  bool _didLoadDependencies = false;
 
   //Mobile Scanner Controller
   final MobileScannerController controller = MobileScannerController(
@@ -75,39 +74,70 @@ class _RunPageState extends State<RunPage> {
   void initState() {
     super.initState();
     _loadRun();
-    _userProvider = context.read<UserProvider>();
-    loadUserData();
-    _checkIfLatestRun();
     _prefsFuture = SharedPreferences.getInstance();
     _initializePreferences();
   }
 
-  Future<void> _loadRun() async {
-    // Example: fetch run by number from Firestore
-    final doc = await FirebaseFirestore.instance
-        .collection('runs')
-        .doc(widget.runNumber
-        .toString()) // make sure runNumber is a String here if needed
-        .get();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
 
-    if (doc.exists) {
-      final data = doc.data(); // nullable safety
-      if (data != null) {
+    if (!_didLoadDependencies) {
+      _userProvider = context.read<UserProvider>();
+      loadUserData(); // This is now safe???
+      _didLoadDependencies = true;
+    }
+  }
+
+  Future<void> _loadRun() async {
+    try {
+      // Attempt to get the document for the specific runNumber from Firestore
+      final doc = await FirebaseFirestore.instance
+          .collection('runs')
+          .doc(widget.runNumber.toString())
+          .get();
+
+      if (doc.exists) {
+        // If the document exists, get its data (which can be null)
+        final data = doc.data();
+
+        if (data != null) {
+          // If data is not null, update the state with the loaded run
+          setState(() {
+            run = RunModel.fromFirestore(data);  // Parse Firestore data into RunModel
+            isLoading = false;                   // Loading is done
+          });
+
+          // After setting run, load any saved selection related to this run
+          await _loadSelection();
+
+          // Perform any additional checks, e.g., if this is the latest run
+          _checkIfLatestRun();
+        } else {
+          // If data is null (empty document), stop loading and update state
+          setState(() {
+            isLoading = false;
+          });
+        }
+      } else {
+        // If document doesn't exist in Firestore, stop loading and update state
         setState(() {
-          run = RunModel.fromFirestore(data);
           isLoading = false;
         });
-      } else {
-        // Handle empty data case
       }
-    } else {
-      // Handle document not found
+    } catch (e) {
+      // Catch any exceptions during Firestore fetch and print error
+      print('Error loading run: $e');
+
+      // Ensure loading state is stopped even if an error occurs
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
   Future<void> _initializePreferences() async {
     _prefs = await _prefsFuture;
-    _loadSelection(); // Now we can load the selection
   }
 
   Future<void> loadUserData() async {
@@ -133,22 +163,31 @@ class _RunPageState extends State<RunPage> {
     if (_prefs == null) return;
 
     final savedDistance = _prefs!.getString('selectedRun_${run!.runNumber}');
+
     if (savedDistance != null && mounted) {
       setState(() {
         selectedRunDistance = savedDistance;
       });
+      await _verifyWithFirebase(savedDistance); // Only verify if valid
+    } else {
+      print('No valid savedDistance to verify');
     }
-
-    _verifyWithFirebase(savedDistance ?? '');
-
   }
 
   Future<void> _verifyWithFirebase(String distance) async {
-    final doc = await _fireStore.collection('runs')
+    final doc = await _fireStore
+        .collection('runs')
         .doc('${run!.runNumber}')
         .get();
 
-    if (!doc.exists || !(doc.data()?[_getRunDocFieldName(distance)] ?? false)) {
+    final data = doc.data();
+    final fieldName = _getRunDocFieldName(distance);
+    final fieldValue = data?[fieldName];
+
+    // Check if the document exists and the field is either true or 1
+    final isFieldValid = fieldValue == true || fieldValue == 1;
+
+    if (!doc.exists || !isFieldValid) {
       await _saveSelection(null);
       if (mounted) {
         setState(() => selectedRunDistance = null);
@@ -255,9 +294,7 @@ class _RunPageState extends State<RunPage> {
                 SizedBox(height: 20),
                 Expanded(
                   child: Center(
-                    child: PrettyQrView.data(
-                      data: run!.runNumber.toString(),
-                    ),
+                    child: PrettyQrView.data(data: run!.runNumber.toString()),
                   ),
                 ),
                 SizedBox(height: 20),
@@ -556,7 +593,8 @@ class _RunPageState extends State<RunPage> {
   }
 
   Future<void> _handleSelectionChange(String distance) async {
-    if (_userProvider.user?.email == null || isLoading || !_isLatestRunResult) return;
+    if (_userProvider.user?.email == null || isLoading || !_isLatestRunResult)
+      return;
 
     final isCurrentlySelected = selectedRunDistance == distance;
     final newState = !isCurrentlySelected;
@@ -630,10 +668,22 @@ class _RunPageState extends State<RunPage> {
   Widget build(BuildContext context) {
     _isAdmin = context.watch<UserProvider>().isAdmin;
 
-    if (isLoading) {
+    if (isLoading || run == null) {
       return Scaffold(
-        appBar: buildBaseAppBar(context, 'Run #${run!.runNumber}'),
-        body: Center(child: CircularProgressIndicator()),
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: AppBar(title: const Text('')),
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text("Loading run data...", style: TextStyle(fontSize: 16)),
+            ],
+          ),
+        ),
       );
     }
 
@@ -903,7 +953,9 @@ class _RunPageState extends State<RunPage> {
             padding: EdgeInsets.all(12),
             child: Center(
               child: ElevatedButton.icon(
-                onPressed: () => _readQRCodeGen(context),
+                onPressed: !_isLatestRunResult
+                    ? null
+                    : () => _readQRCodeGen(context),
                 icon: Icon(Icons.add),
                 label: Text('Read QR Code'),
                 style: ElevatedButton.styleFrom(

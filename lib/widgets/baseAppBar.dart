@@ -27,7 +27,7 @@ AppBar buildBaseAppBar(BuildContext context, title) {
             child: Transform.scale(
               scale: 1.8, // Your scale value
               child: SvgPicture.asset(
-                'assets/RTS_Normal_Logo.svg',
+                'assets/logos/RTS_Normal_Logo.svg',
                 fit: BoxFit.contain,
               ),
             ),
@@ -50,7 +50,7 @@ AppBar buildBaseAppBar(BuildContext context, title) {
         child:  Builder( builder: (context) => IconButton(
           icon: CircleAvatar(
             radius: 20,
-            backgroundImage: AssetImage('assets/RTSLog.png'), // temporary base image
+            backgroundImage: AssetImage('assets/images/profile_default.png'), // temporary base image
             backgroundColor: Colors.grey[300],
           ),
           onPressed: () {

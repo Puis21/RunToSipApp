@@ -69,7 +69,8 @@ class NotificationService {
 
   // For foreground notifications
   static Future<void> _showLocalNotification(RemoteMessage message) async {
-    await _localNotifications.show(
+    ///STILL FOR IN APP NOTIFICATIONS
+   /* await _localNotifications.show(
       0,
       message.notification?.title,
       message.notification?.body,
@@ -81,7 +82,7 @@ class NotificationService {
           priority: Priority.high,
         ),
       ),
-    );
+    );*/
   }
 
 }

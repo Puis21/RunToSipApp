@@ -89,11 +89,12 @@ flutter:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
   assets:
-        - assets/RTSLog.png
-        - assets/RTS_Normal_Logo.svg
-        - assets/RTS_Splash_Logo.png
-        - assets/RTS_NBack_Logo.png
+        - assets/logos/RTSLog.png
+        - assets/logos/RTS_Normal_Logo.svg
+        - assets/logos/RTS_Splash_Logo.png
+        - assets/logos/RTS_NBack_Logo.png
         - assets/animations/checkmark.json
+        - assets/images/profile_default.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

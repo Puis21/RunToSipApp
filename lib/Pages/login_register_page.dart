@@ -158,7 +158,7 @@ class _LoginPageState extends State<LoginPage> {
             Positioned.fill(
               child: Padding(padding: EdgeInsets.only(bottom: 400),
                 child: Image.asset(
-                  'assets/RTS_NBack_Logo.png',
+                  'assets/logos/RTS_NBack_Logo.png',
                   height: 400, // or BoxFit.contain if needed
                 ),
               ),

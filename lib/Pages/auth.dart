@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import "package:run_to_sip_app/models/user_model.dart";
+import 'package:http/http.dart' as http;
 
 class Auth{
   final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
@@ -57,13 +58,37 @@ class Auth{
     await firebaseAuth.signOut();
   }
 
-
   Future<AppUserModel?> getUserByEmail(String? email) async {
     final userDoc = await fireStore.collection('users').doc(email).get();
 
     if (!userDoc.exists) return null;
 
     return AppUserModel.fromMap(userDoc.data()!);
+  }
+
+
+  //Get token from backend
+  Future<String?> getIdToken() async {
+    final user = firebaseAuth.currentUser;
+    if (user == null) return null;
+    return await user.getIdToken();
+  }
+
+  Future<http.Response?> callBackendWithAuth(String url) async {
+    final idToken = await getIdToken();
+    if (idToken == null) {
+      print('No user logged in, cannot get ID token');
+      return null;
+    }
+
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {
+        'Authorization': 'Bearer $idToken',
+      },
+    );
+
+    return response;
   }
 
 }
