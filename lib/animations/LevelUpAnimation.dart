@@ -81,7 +81,7 @@ class _LevelUpAnimationState extends State<LevelUpAnimation>
     setState(() => _isPlayingSound = true);
     try {
       await _audioPlayer.play(
-        AssetSource('sounds/level_up.mp3'),
+        AssetSource('sounds/LevelupSound.mp3'),
         volume: 0.8, // Adjust volume (0.0 to 1.0)
       );
     } catch (e) {

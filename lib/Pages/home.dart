@@ -11,6 +11,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:run_to_sip_app/Provider/UserProvider.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:run_to_sip_app/widgets/RunTile.dart';
 
 import 'dart:ui';
 
@@ -49,11 +50,12 @@ class HomePage extends StatefulWidget {
 
 
 class _MyHomePageState extends State<HomePage> {
+  List<RunModel>? _cachedRuns;
   bool _isAdmin = false;
-  final User? user = Auth().currentUser;
+  final User? user = Auth().currentUser; /// Not needed mby delete?/?
 
   final FirebaseFirestore _fireStore = FirebaseFirestore.instance;
-  String? userEmail; // will get from auth
+  String? userEmail; // will get from auth /// Not needed mby delete?/?
 
   late DocumentReference userDoc;
 
@@ -70,6 +72,8 @@ class _MyHomePageState extends State<HomePage> {
     subscribeToAllUsersTopic();
   }
 
+
+  /// TO DO: Check if this is needed now
   Future<void> subscribeToAllUsersTopic() async {
     await FirebaseMessaging.instance.subscribeToTopic('all_users');
     print('Subscribed to all_users topic');
@@ -89,7 +93,9 @@ class _MyHomePageState extends State<HomePage> {
     }
   }*/
 
-  LinearGradient _runGradient(int index) {
+
+  ///OLD FUNC TO ADD GRADIENT BACKGROUND TO RUNS
+/*  LinearGradient _runGradient(int index) {
     if(index == 0)
       {
         return LinearGradient(
@@ -113,9 +119,7 @@ class _MyHomePageState extends State<HomePage> {
         );
       }
 
-  }
-
-
+  }*/
 
   @override
   Widget build(BuildContext context) {
@@ -134,8 +138,8 @@ class _MyHomePageState extends State<HomePage> {
                 builder: (context) => CreateRunPage()
             ));
           },
-          child: Icon(Icons.add),
           backgroundColor: Colors.yellow,
+          child: Icon(Icons.add),
         ),
       ),
     );
@@ -144,13 +148,13 @@ class _MyHomePageState extends State<HomePage> {
   Widget buildBody() {
     return Padding(
       padding: const EdgeInsets.only(top: 20),
-      child: Container(
-        height: 835,
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: StreamBuilder<QuerySnapshot>(
-          stream:  FirebaseFirestore.instance
+          stream: FirebaseFirestore.instance
               .collection('runs')
               .orderBy('runNumber', descending: true)
+              .limit(10)
               .snapshots(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
@@ -161,127 +165,77 @@ class _MyHomePageState extends State<HomePage> {
                 .map((doc) => RunModel.fromFirestore(doc.data() as Map<String, dynamic>))
                 .toList();
 
-            ///Listing only last 20 runs for optimisation
-            final last20Runs = runs.take(20).toList();
-
             return ListView.separated(
-              itemCount: last20Runs.length,
+              addAutomaticKeepAlives: false,
+              itemCount: runs.length,
               separatorBuilder: (context, index) => const SizedBox(height: 25),
               itemBuilder: (context, index) {
-                final run = last20Runs[index];
-                final runTile = InkWell(
+                final run = runs[index];
+
+                // Create the RunTile widget
+                final runTile = RunTile(
+                  run: run,
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(
-                        builder: (context) => RunPage(runNumber: run.runNumber.toString())
-                    ));
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    height: 150, // or any fixed height if needed
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      ///REMOVED GRADIENT
-                      //gradient: _runGradient(index),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 6,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Stack(
-                        children: [
-                          // Step 1: Background Image
-                          Positioned.fill(
-                            child: CachedNetworkImage(
-                              imageUrl: run.image,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Center(child: CircularProgressIndicator()),
-                              errorWidget: (context, url, error) => Center(child: Text("Image not available")),
-                            ),
-                          ),
-
-                          // Blur layer over the image
-                          Positioned.fill(
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                              child: Container(
-                                color: Colors.black.withOpacity(0.4), // slight dark overlay for contrast
-                              ),
-                            ),
-                          ),
-
-                          // Text content
-                          Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const SizedBox(height: 15),
-                                    Text(
-                                      '#${run.runNumber.toString()}',
-                                      style: const TextStyle(
-                                        fontSize: 25,
-                                        fontFamily: 'Montserrat',
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 15),
-                                    Text(
-                                      run.date,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontFamily: 'Montserrat',
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white70,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        run.name,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontFamily: 'RacingSansOne',
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        run.description,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontFamily: 'Montserrat',
-                                          color: Colors.white70,
-                                        ),
-                                        maxLines: 3,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => RunPage(runNumber: run.runNumber.toString()),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 );
 
-                ///Optional?: Make Runs other than first run grey
-                if (index == 0) {
+                // Apply conditional rendering logic
+                if (run.checkIfExpired()) {
+                  return ColorFiltered(
+                    colorFilter: const ColorFilter.matrix(<double>[
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: runTile,
+                  );
+                } else {
+                  return  runTile;
+                }
+
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+
+
+/*                final date = DateTime.now();
+                final day = run.date.split('/')[0];
+                final month = run.date.split('/')[1];
+                final year = run.date.split('/')[2];
+
+                bool isLessThanRunDay = ((date.day <= int.parse(day) && date.month <= int.parse(month)) || date.year < int.parse(year));
+                bool isSameAsRunDay = (date.day == int.parse(day) && date.month == int.parse(month) && date.year == int.parse(year));
+
+                final hour = run.time.split(':')[0];*/
+
+//print(date.hour);
+
+/*if(isSameAsRunDay && date.hour >= (int.parse(hour)))
+                {
+                  return ColorFiltered(
+                    colorFilter: const ColorFilter.matrix(<double>[
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: runTile,
+                  );
+                }else if (isLessThanRunDay)
+                {
                   return runTile;
                 } else {
                   return ColorFiltered(
@@ -293,17 +247,24 @@ class _MyHomePageState extends State<HomePage> {
                     ]),
                     child: runTile,
                   );
-                }
+                }*/
 
-              },
-            );
-          },
-        ),
-      ),
-    );
-  }
+//print(run.time);
 
-}
+///Optional?: Make Runs other than first run grey
+/*if (index == 0) {
+                  return runTile;
+                } else {
+                  return ColorFiltered(
+                    colorFilter: const ColorFilter.matrix(<double>[
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: runTile,
+                  );
+                }*/
 
 
 // title: Text("List of Runs", style: TextStyle(

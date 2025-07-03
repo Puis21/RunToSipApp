@@ -4,7 +4,7 @@ import 'package:run_to_sip_app/Pages/home.dart';
 
 AppBar buildBaseAppBar(BuildContext context, title) {
   return AppBar(
-    backgroundColor: Color(0xFFffff00),
+    backgroundColor: Color(0xFFffff08),
     elevation: 5.0,
     shadowColor: Colors.black,
     centerTitle: true,

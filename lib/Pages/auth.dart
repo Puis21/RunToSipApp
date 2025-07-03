@@ -41,6 +41,8 @@ class Auth{
       km5: 0,
       km7: 0,
       noDistance: 0,
+      currentStreak: 0,
+      maxStreak: 0,
       isAdmin: false
     );
 

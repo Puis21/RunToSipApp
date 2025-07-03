@@ -16,6 +16,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:lottie/lottie.dart' as lottie;
 import 'package:run_to_sip_app/Provider/UserProvider.dart';
+import 'package:run_to_sip_app/models/run_model.dart';
 
 import 'dart:async';
 import 'auth.dart';
@@ -37,7 +38,6 @@ class _RunPageState extends State<RunPage> {
   bool isLoadingRun = true;
 
   bool _isAdmin = false;
-  bool _isLatestRunResult = false;
   String? selectedRunDistance;
   bool isLoading = true;
   RunType? selectedRunType;
@@ -48,7 +48,7 @@ class _RunPageState extends State<RunPage> {
   //Logic for debouncing and processing user selections
   final _operationQueue = Queue<Future Function()>();
   bool _isProcessingQueue = false;
-  final int _maxQueueSize = 5;
+  final int _maxQueueSize = 8;
   late final Future<SharedPreferences> _prefsFuture;
   SharedPreferences? _prefs;
 
@@ -112,7 +112,7 @@ class _RunPageState extends State<RunPage> {
           await _loadSelection();
 
           // Perform any additional checks, e.g., if this is the latest run
-          _checkIfLatestRun();
+          run!.checkIfExpired();
         } else {
           // If data is null (empty document), stop loading and update state
           setState(() {
@@ -205,27 +205,6 @@ class _RunPageState extends State<RunPage> {
     }
   }
 
-  Future<bool> isLatestRun(String runId) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('runs')
-        .orderBy('runNumber', descending: true)
-        .limit(1)
-        .get();
-
-    if (snapshot.docs.isEmpty) return false;
-
-    final latestRunDoc = snapshot.docs.first;
-
-    return latestRunDoc.id == runId;
-  }
-
-  void _checkIfLatestRun() async {
-    final result = await isLatestRun(run!.runNumber.toString());
-    setState(() {
-      _isLatestRunResult = result;
-    });
-  }
-
   @override
   void dispose() {
     mapController?.dispose();
@@ -243,6 +222,18 @@ class _RunPageState extends State<RunPage> {
         return Colors.orange;
       case '7km':
         return Colors.brown;
+      default:
+        return Colors.blue;
+    }
+  }
+
+  // Helper method to get colors for choices
+  Color _getColorChoice(String distance) {
+    switch (distance) {
+      case 'numPeopleDecided':
+        return Colors.green;
+      case 'numPeopleUndecided':
+        return Colors.orange;
       default:
         return Colors.blue;
     }
@@ -508,7 +499,8 @@ class _RunPageState extends State<RunPage> {
             break;
         }
 
-        userProvider.increaseXp(1, context: context);
+        await userProvider.increaseXp(1, context: context);
+        await userProvider.increaseStreak();
 
         /*   // Firestore updates
         await userRef.update({
@@ -593,16 +585,16 @@ class _RunPageState extends State<RunPage> {
   }
 
   Future<void> _handleSelectionChange(String distance) async {
-    if (_userProvider.user?.email == null || isLoading || !_isLatestRunResult)
-      return;
+    if (_userProvider.user?.email == null || isLoading || run!.checkIfExpired()) return;
 
+    final previousSelection = selectedRunDistance;
     final isCurrentlySelected = selectedRunDistance == distance;
     final newState = !isCurrentlySelected;
 
-    // Save to local storage immediately
+    // Save to local storage
     await _saveSelection(newState ? distance : null);
 
-    // Immediate UI update
+    // Update UI
     setState(() {
       selectedRunDistance = newState ? distance : null;
     });
@@ -611,7 +603,13 @@ class _RunPageState extends State<RunPage> {
       _operationQueue.removeFirst(); // Drop oldest operation
     }
 
-    // Add to operation queue
+    // If there was a previous selection and we're switching to a new one,
+    // decrement the old and increment the new
+    if (newState && previousSelection != null && previousSelection != distance) {
+      _operationQueue.add(() => _createFirebaseOperation(previousSelection, false)); // Decrement old
+    }
+
+    // Always add the new operation (either select or deselect)
     _operationQueue.add(() => _createFirebaseOperation(distance, newState));
 
     if (!_isProcessingQueue) {
@@ -626,7 +624,7 @@ class _RunPageState extends State<RunPage> {
       final operation = _operationQueue.removeFirst();
       await operation();
       await Future.delayed(
-        Duration(milliseconds: 200),
+        Duration(milliseconds: 150),
       ); // Small delay between ops
     }
 
@@ -641,19 +639,11 @@ class _RunPageState extends State<RunPage> {
       if (isSelect) {
         await docRef.update({
           field: FieldValue.increment(1),
-          'numPeople': FieldValue.increment(1),
         });
-        if (_userProvider.user != null) {
-          await _userProvider.incrementRun(distance);
-        }
       } else {
         await docRef.update({
           field: FieldValue.increment(-1),
-          'numPeople': FieldValue.increment(-1),
         });
-        if (_userProvider.user != null) {
-          await _userProvider.decrementRun(distance);
-        }
       }
     } catch (e) {
       // Revert UI on error
@@ -914,7 +904,7 @@ class _RunPageState extends State<RunPage> {
             child: Align(
               alignment: Alignment.center,
               child: Text(
-                "Choose Your Challenge!",
+                "Do you think you can make it?!",
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
@@ -924,15 +914,16 @@ class _RunPageState extends State<RunPage> {
             padding: EdgeInsets.only(),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: ['3km', '5km', '7km'].map((distance) {
+              children: ['numPeopleDecided', 'numPeopleUndecided'].map((distance) {
                 final isSelected = selectedRunDistance == distance;
-                final color = _getColorForDistance(distance); // helper
+                final color = _getColorChoice(distance); // helper
 
                 return OutlinedButton(
-                  onPressed: !_isLatestRunResult
+                  onPressed: run!.checkIfExpired()
                       ? null
                       : () => _handleSelectionChange(distance),
                   style: OutlinedButton.styleFrom(
+                    minimumSize: Size(125, 50),
                     backgroundColor: isSelected ? color : Colors.transparent,
                     side: BorderSide(color: color),
                     foregroundColor: isSelected ? Colors.white : color,
@@ -942,7 +933,7 @@ class _RunPageState extends State<RunPage> {
                     ),
                   ),
                   child: Text(
-                    distance,
+                    distance == 'numPeopleDecided' ? "I Will Be There!!" : "I Don't Think so...",
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 );
@@ -953,7 +944,7 @@ class _RunPageState extends State<RunPage> {
             padding: EdgeInsets.all(12),
             child: Center(
               child: ElevatedButton.icon(
-                onPressed: !_isLatestRunResult
+                onPressed: run!.checkIfExpired()
                     ? null
                     : () => _readQRCodeGen(context),
                 icon: Icon(Icons.add),
@@ -1055,12 +1046,12 @@ class _RunPageState extends State<RunPage> {
   //Helper for updating runs
   String _getRunDocFieldName(String distance) {
     switch (distance) {
-      case '3km':
-        return 'numPeople3km';
-      case '5km':
-        return 'numPeople5km';
-      case '7km':
-        return 'numPeople7km';
+      case 'numPeopleDecided':
+        return 'numPeopleDecided';
+      case 'numPeopleUndecided':
+        return 'numPeopleUndecided';
+/*      case '7km':
+        return 'numPeople7km';*/
       default:
         throw ArgumentError('Invalid distance: $distance');
     }

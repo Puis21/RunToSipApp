@@ -28,6 +28,8 @@ class UserProvider extends ChangeNotifier {
   int get km3 => _user?.km3 ?? 0;
   int get km5 => _user?.km5 ?? 0;
   int get km7 => _user?.km7 ?? 0;
+  int get currentStreak => _user?.currentStreak ?? 0;
+  int get maxStreak => _user?.maxStreak ?? 0;
   int get noDistance => _user?.noDistance ?? 0;
 
   void setUser(AppUserModel newUser) {
@@ -73,6 +75,79 @@ class UserProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> increaseStreak() async {
+    if (_user == null || _isDisposed) return;
+
+    final prevStreak = _user!.currentStreak;
+
+    try {
+      _user!.currentStreak++;
+
+      if (_user!.currentStreak > _user!.maxStreak) {
+        _user!.maxStreak = _user!.currentStreak;
+      }
+
+      notifyListeners();
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_user!.email)
+          .update({
+        'current_streak': _user!.currentStreak,
+        'max_streak': _user!.maxStreak,
+      });
+    } catch (e) {
+      if (!_isDisposed) {
+        _user!.currentStreak = prevStreak;
+        notifyListeners();
+      }
+      rethrow;
+    }
+  }
+
+  ///TO DO: Need to add a new var for the user, the get the latest run he has been
+  /// and compare it to the latest run, if the difference is let's say more than 8 days
+  /// RESEEET
+  Future<void> checkResetStreak() async {
+    if (_user == null || _isDisposed || currentStreak == 0) return;
+
+    final runsSnapshot = await FirebaseFirestore.instance
+        .collection('runs')
+        .orderBy('date', descending: true) // Could try runNumber too if i get problems
+        .limit(1)
+        .get();
+
+    if (runsSnapshot.docs.isEmpty) return;
+
+    final latestRunData = runsSnapshot.docs.first.data();
+    final latestRunDate = (latestRunData['date'] as Timestamp).toDate();
+
+    final today = DateTime.now();
+    final yesterday = DateTime(today.year, today.month, today.day).subtract(Duration(days: 1));
+
+    print(latestRunDate);
+    print(yesterday);
+
+    try {
+      if (latestRunDate.isBefore(yesterday)) {
+        _user!.currentStreak = 0;
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_user!.email)
+            .update({'current_streak': 0});
+        notifyListeners();
+      }
+    } catch (e) {
+      if (!_isDisposed) {
+        _user!.currentStreak = 0;
+        notifyListeners();
+      }
+      rethrow;
+    }
+
+  }
+
+
   Future<void> increaseXp(int amount, {BuildContext? context}) async {
     if (_user == null || _isDisposed) return;
 
@@ -86,11 +161,11 @@ class UserProvider extends ChangeNotifier {
         newLevel++;
         _user!.xp = 0;
 
-        print("WAIT LEVEL: $newLevel");
+        //print("WAIT LEVEL: $newLevel");
         // Show level-up animation
         if (didLevelUp && context != null) {
 
-          print("DID LEVEL");
+          //print("DID LEVEL");
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
             Navigator.of(context).push(
@@ -132,6 +207,43 @@ class UserProvider extends ChangeNotifier {
   }
 
   String getRank(int level) => levelRanks[level] ?? 'Unknown';
+
+  Future<double> getUserPercentile() async {
+    try {
+      QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('users').get();
+
+      final totalRuns = [];
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        totalRuns.add(data['runs_total']);
+      }
+
+      totalRuns.sort();
+      var num = totalRuns.length;
+      //print('Total Runs: $totalRuns');
+
+      int userRuns = _user!.runsTotal;
+      int lowerIndex = totalRuns.indexWhere((value) => value == userRuns);
+      int upperIndex = totalRuns.lastIndexWhere((value) => value == userRuns);
+      int avgIndex = ((lowerIndex + upperIndex) / 2).floor();
+
+      //print('UserIndex: $avgIndex');
+
+      double percentile = (avgIndex / (num - 1)) * 100;
+      percentile = double.parse(percentile.toStringAsFixed(0));
+      percentile = percentile.clamp(1, 99);
+
+      return percentile;
+
+      //print('User is in the top ${100 - percentile}%');
+      //print('User is in the top ${percentile.toStringAsFixed(0)}th percentile');
+
+    } catch (e) {
+      print('Error getting users: $e');
+    }
+    return 0;
+  }
 
   // Call this to increment runs count and update Firestore
   Future<void> incrementRun(String distanceKey) async {

@@ -58,6 +58,7 @@ dependencies:
   animated_text_kit: ^4.2.2
   firebase_messaging: ^15.2.8
   flutter_local_notifications: 14.1.1
+  package_info_plus: ^8.3.0
 
 dev_dependencies:
   flutter_test:
@@ -95,6 +96,7 @@ flutter:
         - assets/logos/RTS_NBack_Logo.png
         - assets/animations/checkmark.json
         - assets/images/profile_default.png
+        - assets/sounds/LevelupSound.mp3
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

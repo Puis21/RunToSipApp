@@ -54,6 +54,8 @@ class RunModel {
   int numPeople3Km = 0;
   int numPeople5Km = 0;
   int numPeople7Km = 0;
+  int numPeopleDecided = 0;
+  int numPeopleUndecided = 0;
 
   double lat = 21.502888;
   double long = -157.999006;
@@ -104,6 +106,29 @@ class RunModel {
     );
   }
 
+  bool checkIfExpired() {
+    final now = DateTime.now();
+
+    final parts = date.split('/');
+    if (parts.length != 3) return true; // Invalid date format => consider expired
+
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+
+    if (day == null || month == null || year == null) return true;
+
+    final timeParts = time.split(':');
+    if (timeParts.length != 2) return true; // Invalid time format
+
+    final hour = int.tryParse(timeParts[0]);
+    if (hour == null) return true;
+
+    final runDateTime = DateTime(year, month, day, hour + 2); /// TO DO: MAKE IT BETTER
+
+    return now.isAfter(runDateTime);
+  }
+
   ///Old code for manual runs
  /* static List<RunModel> getRuns() {
     List<RunModel> runs = [];
@@ -122,4 +147,5 @@ class RunModel {
   }*/
 
 }
+
 

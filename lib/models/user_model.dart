@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class AppUserModel{
+class AppUserModel {
   final String email;
   final String fullName;
   int level;
@@ -10,6 +10,8 @@ class AppUserModel{
   int km5;
   int km7;
   int noDistance;
+  int currentStreak;
+  int maxStreak;
   bool isAdmin;
 
   AppUserModel({
@@ -22,23 +24,27 @@ class AppUserModel{
     required this.km5,
     required this.km7,
     required this.noDistance,
+    required this.currentStreak,
+    required this.maxStreak,
     required this.isAdmin,
   });
 
   factory AppUserModel.fromMap(Map<String, dynamic> data) {
     return AppUserModel(
-      email: data['email'],
-      fullName: data['fullName'],
-      level: data['Level'],
-      xp: data['Xp'],
-      runsTotal: data['runs_total'],
-      km3: data['3km'],
-      km5: data['5km'],
-      km7: data['7km'],
-      noDistance: data['noDistance'],
-      isAdmin: data['isAdmin']
+      email: data['email'] ?? 'noemail@gmail.com',
+      fullName: data['fullName'] ?? 'Dracula',
+      level: data['Level'] ?? 0,
+      xp: data['Xp'] ?? 0,
+      runsTotal: data['runs_total'] ?? 0,
+      km3: data['3km'] ?? 0,
+      km5: data['5km'] ?? 0,
+      km7: data['7km'] ?? 0,
+      noDistance: data['noDistance'] ?? 0,
+      currentStreak: data['currentStreak'] ?? 0,
+      maxStreak: data['maxStreak'] ?? 0,
+      isAdmin: data['isAdmin'] ?? false,
     );
-}
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -51,13 +57,15 @@ class AppUserModel{
       '5km': km5,
       '7km': km7,
       'noDistance': noDistance,
-      'isAdmin' : isAdmin
+      'currentStreak': currentStreak,
+      'maxStreak': maxStreak,
+      'isAdmin': isAdmin,
     };
   }
 
   ///ADDED ALL THE LOGIC TO USER PROVIDER
   /// Method to increase XP and level up
-/*  Future<void> increaseXp(int amount) async {
+  /*  Future<void> increaseXp(int amount) async {
     print("Amountxp: $amount");
     print("xp base: $xp");
     print("level base: $level");
@@ -114,5 +122,4 @@ class AppUserModel{
       return 3;
     }
   }*/
-
 }

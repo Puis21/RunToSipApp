@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:run_to_sip_app/Pages/contact_form.dart';
 import 'package:run_to_sip_app/Pages/home.dart';
 import 'package:run_to_sip_app/Pages/auth.dart';
 import 'package:run_to_sip_app/Provider/UserProvider.dart';
+import 'package:run_to_sip_app/Pages/profile_page.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 Widget buildBaseEndDrawer(BuildContext context) {
   return Consumer<UserProvider>(
@@ -59,27 +62,58 @@ Widget buildBaseEndDrawer(BuildContext context) {
                   },
                 ),
                 ListTile(
-                  leading: Icon(Icons.settings),
+                  leading: Icon(Icons.person_2),
                   title: Text('Profile'),
                   onTap: () {
-                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => ProfilePage()));
                   },
                 ),
               ],
             ),
           ),
-
-          const Divider(color: Colors.black54),
-          // Logout button at bottom
-          ListTile(
-            leading: Icon(Icons.logout),
-            title: Text('Logout'),
-            onTap: () {
-              // Handle logout logic
-              Auth().signOut();
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              final version = snapshot.hasData
+                  ? 'v${snapshot.data!.version}+${snapshot.data!.buildNumber}'
+                  : '';
+              return Column(
+                children: [
+                  ListTile(
+                    leading: Icon(Icons.email),
+                    title: Text('Report a Bug'),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ContactForm(),
+                        ),
+                      );
+                    },
+                  ),
+                  const Divider(color: Colors.black54),
+                  ListTile(
+                    leading: Icon(Icons.logout),
+                    title: Text('Logout'),
+                    onTap: () {
+                      Auth().signOut();
+                    },
+                  ),
+                  SizedBox(height: 8),
+                  if (snapshot.hasData)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        version,
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
+                ],
+              );
             },
           ),
-          SizedBox(height: 16),
         ],
       ),
     ),
