@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:run_to_sip_app/colors/app_colors.dart';
 import 'package:run_to_sip_app/widgets/baseEndDrawer.dart';
 import 'package:run_to_sip_app/widgets/baseAppBar.dart';
 import 'dart:convert';
@@ -195,7 +196,7 @@ class _ContactFormState extends State<ContactForm> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.blue.shade600, width: 2),
+          borderSide: BorderSide(color: AppColors.brown, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
